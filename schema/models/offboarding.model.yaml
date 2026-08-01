@@ -1,0 +1,102 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: Offboarding
+# Description: The leaver journey. Tracks reason + notice + last working day and
+#              drives clearance, exit interview, and final settlement. Emits an
+#              `Offboarded` event on close for the composer to flip
+#              employee.employment.status to inactive. The `reason` variant set
+#              spans both the lifecycle causes (resignation/termination/…) AND
+#              the 🇮🇩 pesangon (severance) calc causes (merger/efficiency/…),
+#              since reason selects the statutory severance formula.
+# =============================================================================
+
+models:
+  - name: Offboarding
+    collection: offboardings
+    description: "Leaver journey — reason, notice, last working day, status; drives clearance + final settlement."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique offboarding id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The leaver # logical FK employee.Employee.id"
+
+      reason:
+        type: OffboardingReason
+        attributes: ["@required", "@default(resignation)"]
+        description: "Why the employee is leaving — also selects the pesangon formula"
+
+      notice_date:
+        type: date
+        attributes: ["@required"]
+        description: "Date notice was given / received"
+
+      last_working_day:
+        type: date
+        attributes: ["@required"]
+        description: "Final day of employment"
+
+      status:
+        type: OffboardingStatus
+        attributes: ["@required", "@default(initiated)"]
+        description: "Workflow status"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [company_id, employee_id]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: OffboardingReason
+    description: "Reason for offboarding — doubles as the pesangon (severance) calc selector"
+    variants:
+      - name: resignation
+        default: true
+        description: "Voluntary resignation — pesangon scaled by tenure"
+      - name: termination
+        description: "Employer-initiated termination"
+      - name: end_of_contract
+        description: "Fixed-term contract ended naturally"
+      - name: retirement
+        description: "Retirement (pension/JHT rules apply)"
+      - name: death
+        description: "Death of the employee (per UU Manpower)"
+      - name: merger_acquisition
+        description: "Merger / acquisition — pesangon 1 mo/yr, cap 8"
+      - name: efficiency
+        description: "Efficiency / restructuring — pesangon 1 mo/yr, cap 8"
+      - name: force_majeure
+        description: "Force majeure — pesangon 0.5 mo/yr, cap 4"
+      - name: misconduct
+        description: "Misconduct (gross) — no pesangon"
+
+  - name: OffboardingStatus
+    description: "Offboarding workflow status"
+    variants:
+      - name: initiated
+        default: true
+        description: "Offboarding started"
+      - name: in_progress
+        description: "Clearance + settlement underway"
+      - name: cleared
+        description: "All clearance items resolved"
+      - name: closed
+        description: "Offboarding complete"

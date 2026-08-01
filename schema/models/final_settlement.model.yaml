@@ -1,0 +1,100 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: FinalSettlement
+# Description: The final pay packet on exit — base pay for the final period,
+#              unused-leave payout, 🇮🇩 pesangon (severance), tax deduction, and
+#              the net payable. The pesangon_amount is computed by the
+#              pesangon() calc in src/application/service/pesangon.rs (pure fn
+#              over reads of tenure/reason/salary — computation, not master
+#              data). Status: draft → confirmed → paid (or disputed).
+# =============================================================================
+
+models:
+  - name: FinalSettlement
+    collection: final_settlements
+    description: "Final pay packet — base pay, unused-leave payout, pesangon, tax, net payable."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique final settlement id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The leaver # logical FK employee.Employee.id"
+
+      offboarding_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(Offboarding.id)"]
+        description: "Parent offboarding # FK lifecycle.offboardings.id (in-module)"
+
+      period:
+        type: string
+        attributes: ["@required", "@length(max=20)"]
+        description: "Settlement period label (e.g. 2026-08)"
+
+      base_pay:
+        type: decimal
+        attributes: ["@required", "@precision(18,2)", "@non_negative"]
+        description: "Base pay for the final (prorated) period"
+
+      unused_leave_payout:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "Payout for unused leave days"
+
+      pesangon_amount:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "🇮🇩 Severance total (pesangon + UPMK + UPM) from the pesangon() calc"
+
+      tax_deduction:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "Final-withholding tax deduction"
+
+      net_payable:
+        type: decimal
+        attributes: ["@required", "@precision(18,2)"]
+        description: "Net amount payable to the leaver"
+
+      status:
+        type: SettlementStatus
+        attributes: ["@required", "@default(draft)"]
+        description: "Settlement status"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [company_id, employee_id]
+      - type: index
+        fields: [offboarding_id]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: SettlementStatus
+    description: "Final settlement status"
+    variants:
+      - name: draft
+        default: true
+        description: "Drafted, not yet confirmed"
+      - name: confirmed
+        description: "Confirmed by HR/finance"
+      - name: paid
+        description: "Paid to the leaver"
+      - name: disputed
+        description: "Disputed by the leaver"

@@ -1,0 +1,75 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: Onboarding
+# Description: The joiner journey. Tracks a new hire from pending → in_progress
+#              → completed (or abandoned). Owns the onboarding tasks; emits an
+#              `Onboarded` event on completion for the composer to flip
+#              employee.employment.status.
+# =============================================================================
+
+models:
+  - name: Onboarding
+    collection: onboardings
+    description: "Joiner journey — tracks a new hire from pending to completed/abandoned."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique onboarding id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The new hire # logical FK employee.Employee.id"
+
+      start_date:
+        type: date
+        attributes: ["@required"]
+        description: "First working day / orientation start"
+
+      status:
+        type: OnboardingStatus
+        attributes: ["@required", "@default(pending)"]
+        description: "Workflow status"
+
+      completed_at:
+        type: datetime?
+        description: "When onboarding was marked completed"
+
+      template_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Onboarding template used # logical FK (external template catalog)"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [company_id, employee_id]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: OnboardingStatus
+    description: "Onboarding workflow status"
+    variants:
+      - name: pending
+        default: true
+        description: "Created, not yet started"
+      - name: in_progress
+        description: "Tasks underway"
+      - name: completed
+        description: "All required tasks done"
+      - name: abandoned
+        description: "Joiner withdrew / no-show"

@@ -1,0 +1,69 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: ClearanceItem
+# Description: One clearance checkpoint owned by a clearer (e.g. return laptop,
+#              settle cash advance, revoke access). Progresses pending →
+#              cleared/blocked; an offboarding is `cleared` once all its items
+#              are cleared.
+# =============================================================================
+
+models:
+  - name: ClearanceItem
+    collection: clearance_items
+    description: "A single clearance checkpoint within an offboarding."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique clearance item id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      offboarding_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(Offboarding.id)"]
+        description: "Parent offboarding # FK lifecycle.offboardings.id (in-module)"
+
+      title:
+        type: string
+        attributes: ["@required", "@length(max=255)"]
+        description: "Clearance checkpoint title"
+
+      clearer_employee_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Employee responsible for clearing # logical FK employee.Employee.id"
+
+      status:
+        type: ClearanceStatus
+        attributes: ["@required", "@default(pending)"]
+        description: "Clearance status"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [offboarding_id]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: ClearanceStatus
+    description: "Status of a single clearance item"
+    variants:
+      - name: pending
+        default: true
+        description: "Awaiting clearance"
+      - name: cleared
+        description: "Cleared by the responsible party"
+      - name: blocked
+        description: "Blocked — needs intervention"

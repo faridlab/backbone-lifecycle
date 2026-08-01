@@ -1,0 +1,147 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: Promotion
+# Description: An employment-change workflow (a "move") — promotion / transfer /
+#              demotion / lateral. Same shape as onboarding/offboarding. On
+#              effective it EMITS two changes: a role change →
+#              employee.EmploymentHistory and a salary change →
+#              payroll.CompensationChange. Lifecycle never writes those schemas
+#              directly (no Cargo edge) — the composer applies the events.
+#
+#              Field `promotion_type` (not `type`) to dodge the Rust reserved-word
+#              codegen inconsistency (entity generator escapes r#type but the
+#              repository + exports generators do not).
+# =============================================================================
+
+models:
+  - name: Promotion
+    collection: promotions
+    description: "Promotion / transfer / demotion workflow. On effective, emits role + salary changes."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique promotion id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The employee being moved # logical FK employee.Employee.id"
+
+      promotion_type:
+        type: PromotionType
+        attributes: ["@required", "@default(promotion)"]
+        description: "Kind of move (renamed from `type` to dodge Rust keyword)"
+
+      position_id_from:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Source position # logical FK organization.Position.id"
+
+      position_id_to:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Target position # logical FK organization.Position.id"
+
+      level_id_from:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Source level # logical FK organization.Level.id"
+
+      level_id_to:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Target level # logical FK organization.Level.id"
+
+      department_id_from:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Source department # logical FK organization.Department.id"
+
+      department_id_to:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Target department # logical FK organization.Department.id"
+
+      proposed_salary:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "New salary → payroll.CompensationChange on effective"
+
+      effective_date:
+        type: date
+        attributes: ["@required"]
+        description: "When the move takes effect"
+
+      status:
+        type: PromotionStatus
+        attributes: ["@required", "@default(draft)"]
+        description: "Workflow status"
+
+      requested_by:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Who requested the move # logical FK employee.Employee.id"
+
+      approved_by:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Who approved the move # logical FK employee.Employee.id"
+
+      appraisal_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Merit justification # logical FK performance.Appraisal.id"
+
+      reason:
+        type: string?
+        attributes: ["@length(max=2000)"]
+        description: "Free-form rationale / merit note"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id, employee_id, effective_date]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: PromotionType
+    description: "Kind of employment move"
+    variants:
+      - name: promotion
+        default: true
+        description: "Upward move (raise in level/grade)"
+      - name: transfer
+        description: "Lateral move across positions/departments"
+      - name: demotion
+        description: "Downward move"
+      - name: lateral
+        description: "Same-grade role change"
+
+  - name: PromotionStatus
+    description: "Promotion workflow status"
+    variants:
+      - name: draft
+        default: true
+        description: "Drafted, not yet submitted"
+      - name: pending
+        description: "Awaiting approval"
+      - name: approved
+        description: "Approved, pending effective date"
+      - name: rejected
+        description: "Rejected"
+      - name: effective
+        description: "Effective — events emitted"
+      - name: cancelled
+        description: "Cancelled"

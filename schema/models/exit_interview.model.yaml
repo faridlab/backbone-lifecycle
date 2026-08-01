@@ -1,0 +1,60 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: ExitInterview
+# Description: Structured exit interview — free-form JSON responses plus a
+#              would-recommend signal. Optionally linked to an offboarding and
+#              conducted by an employee.
+# =============================================================================
+
+models:
+  - name: ExitInterview
+    collection: exit_interviews
+    description: "Structured exit interview — JSON responses + recommend signal."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique exit interview id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Interviewee # logical FK employee.Employee.id"
+
+      offboarding_id:
+        type: uuid?
+        attributes: ["@foreign_key(Offboarding.id)"]
+        description: "Linked offboarding # FK lifecycle.offboardings.id (in-module)"
+
+      conducted_by:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Interviewer # logical FK employee.Employee.id"
+
+      responses:
+        type: json
+        attributes: ["@required"]
+        description: "Free-form questionnaire responses (JSON)"
+
+      would_recommend:
+        type: boolean?
+        description: "Would the leaver recommend the company as an employer?"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [company_id, employee_id]
+      - type: index
+        fields: [offboarding_id]

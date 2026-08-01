@@ -1,0 +1,114 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  grpc_port: 50051
+database:
+  url: postgresql://root:password@localhost:5432/skeletondb
+  max_connections: 10
+  min_connections: 5
+  connect_timeout: 30
+  idle_timeout: 600
+logging:
+  level: info
+  format: json
+  file: logs/lifecycle.log
+module:
+  name: lifecycle
+  enabled: true
+features:
+  soft_delete: true
+  state_machines: false
+  workflows: true
+entities:
+  clearance_item:
+    collection: clearance_items
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  exit_interview:
+    collection: exit_interviews
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  final_settlement:
+    collection: final_settlements
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  offboarding:
+    collection: offboardings
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  onboarding:
+    collection: onboardings
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  onboarding_task:
+    collection: onboarding_tasks
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  promotion:
+    collection: promotions
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+tracing:
+  enabled: true
+  exporter: otlp
+  endpoint: http://localhost:4317
+metrics:
+  enabled: true
+  endpoint: /metrics
+  port: 9090
+
+# Indonesian pesangon (severance) rates (UU 13/2003 + PP 35/2021). All rates/scales/rules
+# live here so they can be revised without code changes. Values are quoted strings so
+# rust_decimal deserializes them losslessly (floats would round). The
+# PesangonConfig::default() in src/application/service/pesangon.rs mirrors this block; when a
+# rate changes, update both (or just this file — the loader prefers it).
+pesangon:
+  # UPM — rights replacement: upm_rate × (pesangon + upmk) when tenure ≥ 1.
+  upm_rate: "0.15"
+  # Divisor for the unused-leave daily-rate payout (monthly_salary / working_days_per_month).
+  working_days_per_month: "22"
+  # UPMK — service appreciation: months of salary by tenure band (largest min_tenure_years
+  # ≤ actual tenure wins). <2→1, <3→2, <4→3, <5→4, <6→5, <7→6, <8→7, ≥8→8.
+  upmk_scale:
+    - { min_tenure_years: "0", months: 1 }
+    - { min_tenure_years: "2", months: 2 }
+    - { min_tenure_years: "3", months: 3 }
+    - { min_tenure_years: "4", months: 4 }
+    - { min_tenure_years: "5", months: 5 }
+    - { min_tenure_years: "6", months: 6 }
+    - { min_tenure_years: "7", months: 7 }
+    - { min_tenure_years: "8", months: 8 }
+  # Pesangon (severance) rule per offboarding reason: months_per_year × tenure × salary,
+  # capped at cap_months × salary. `resignation` is special-cased in the calc (tenure-scaled
+  # via the UPMK table) and deliberately absent here.
+  reason_rules:
+    merger_acquisition: { months_per_year: "1",   cap_months: "8" }   # 1 mo/yr, cap 8
+    efficiency:         { months_per_year: "1",   cap_months: "8" }   # 1 mo/yr, cap 8
+    force_majeure:      { months_per_year: "0.5", cap_months: "4" }   # 0.5 mo/yr, cap 4
+    termination:        { months_per_year: "1",   cap_months: "8" }   # employer-initiated (configurable)
+    end_of_contract:    { months_per_year: "0",   cap_months: "0" }   # natural contract end
+    retirement:         { months_per_year: "0",   cap_months: "0" }   # pension/JHT regime
+    death:              { months_per_year: "1",   cap_months: "8" }   # per UU Manpower (JKM separate)
+    misconduct:         { months_per_year: "0",   cap_months: "0" }   # gross misconduct forfeits severance
+

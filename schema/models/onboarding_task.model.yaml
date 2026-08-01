@@ -1,0 +1,93 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: OnboardingTask
+# Description: A single task within an Onboarding (document collection, equipment
+#              handout, account provisioning, policy ack, induction). Owned by an
+#              optional employee; progresses pending → done/skipped/blocked.
+# =============================================================================
+
+models:
+  - name: OnboardingTask
+    collection: onboarding_tasks
+    description: "A single task within an onboarding workflow."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique task id"
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK organization.Company.id"
+
+      onboarding_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(Onboarding.id)"]
+        description: "Parent onboarding # FK lifecycle.onboardings.id (in-module)"
+
+      title:
+        type: string
+        attributes: ["@required", "@length(max=255)"]
+        description: "Task title"
+
+      category:
+        type: TaskCategory?
+        description: "Task category"
+
+      owner_employee_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Task owner # logical FK employee.Employee.id"
+
+      due_date:
+        type: date?
+        description: "When the task is due"
+
+      status:
+        type: TaskStatus
+        attributes: ["@required", "@default(pending)"]
+        description: "Task status"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [onboarding_id]
+      - type: index
+        fields: [status]
+
+enums:
+  - name: TaskCategory
+    description: "Category of an onboarding task"
+    variants:
+      - name: document
+        default: true
+        description: "Document collection / verification"
+      - name: equipment
+        description: "Equipment handout"
+      - name: account_access
+        description: "Account / system provisioning"
+      - name: policy_ack
+        description: "Policy acknowledgement"
+      - name: induction
+        description: "Induction / orientation session"
+
+  - name: TaskStatus
+    description: "Status of an onboarding/offboarding task"
+    variants:
+      - name: pending
+        default: true
+        description: "Not started"
+      - name: done
+        description: "Completed"
+      - name: skipped
+        description: "Skipped (not applicable)"
+      - name: blocked
+        description: "Blocked pending a dependency"

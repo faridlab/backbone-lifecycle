@@ -56,15 +56,24 @@ pub enum OffboardingCloseError {
     /// The offboarding exists but is not `cleared` (only a cleared offboarding may be closed; a
     /// `closed` one is a no-op, anything else is a domain violation).
     #[error("offboarding {offboarding_id} is not cleared (status: {status})")]
-    NotCleared { offboarding_id: Uuid, status: String },
+    NotCleared {
+        offboarding_id: Uuid,
+        status: String,
+    },
     /// The offboarding exists but is not `in_progress` (only an in-flight offboarding may be
     /// marked cleared; an already-`cleared`/`closed` one is a no-op).
     #[error("offboarding {offboarding_id} is not in_progress (status: {status})")]
-    NotInProgress { offboarding_id: Uuid, status: String },
+    NotInProgress {
+        offboarding_id: Uuid,
+        status: String,
+    },
     /// One or more clearance items are still open (`pending` or `blocked`) — the offboarding
     /// cannot be marked cleared while a checkpoint remains unresolved.
     #[error("offboarding {offboarding_id} has {open_count} open clearance item(s) (pending/blocked); resolve before clearing")]
-    ClearanceOpen { offboarding_id: Uuid, open_count: i64 },
+    ClearanceOpen {
+        offboarding_id: Uuid,
+        open_count: i64,
+    },
     /// The employee has no `join_date` — tenure cannot be computed, so the pesangon cannot be
     /// computed. Fail closed: the offboarding is NOT closed.
     #[error("cannot compute pesangon: employee {employee_id} has no employment join_date")]
@@ -154,7 +163,9 @@ impl OffboardingWriteService {
     /// does not need to override rates or swap the input source).
     pub fn with_pool(pool: PgPool) -> Self {
         let inputs = Arc::new(
-            crate::application::service::offboarding_ports::PoolOffboardingInputs::new(pool.clone()),
+            crate::application::service::offboarding_ports::PoolOffboardingInputs::new(
+                pool.clone(),
+            ),
         );
         Self::new(pool, inputs, PesangonConfig::default())
     }
@@ -243,15 +254,22 @@ impl OffboardingWriteService {
         }
         if status != "in_progress" {
             tx.rollback().await?;
-            return Err(OffboardingCloseError::NotInProgress { offboarding_id, status });
+            return Err(OffboardingCloseError::NotInProgress {
+                offboarding_id,
+                status,
+            });
         }
 
-        // The derivation this verb stamps: zero open items. status::text — Postgres enum.
+        // The derivation this verb stamps: zero open LIVE items. Soft-deleted items are gone
+        // for every other purpose in this module (the settlement's uniqueness index uses the
+        // same soft-delete filter), so removing a mistaken checkpoint must not hold the exit
+        // hostage. status::text — Postgres enum.
         let open_count: i64 = sqlx::query_scalar(
             r#"SELECT count(*) FROM lifecycle.clearance_items
                 WHERE offboarding_id = $1
                   AND company_id = $2
-                  AND status::text IN ('pending', 'blocked')"#,
+                  AND status::text IN ('pending', 'blocked')
+                  AND (metadata->>'deleted_at') IS NULL"#,
         )
         .bind(offboarding_id)
         .bind(company)
@@ -259,15 +277,21 @@ impl OffboardingWriteService {
         .await?;
         if open_count > 0 {
             tx.rollback().await?;
-            return Err(OffboardingCloseError::ClearanceOpen { offboarding_id, open_count });
+            return Err(OffboardingCloseError::ClearanceOpen {
+                offboarding_id,
+                open_count,
+            });
         }
 
+        // Belt-and-braces company predicate on the state change: the id was just read under
+        // `FOR UPDATE` inside this scope, so the tenant is written into the statement itself.
         sqlx::query(
             r#"UPDATE lifecycle.offboardings
                   SET status = 'cleared'
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $2"#,
         )
         .bind(offboarding_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -332,7 +356,10 @@ impl OffboardingWriteService {
         }
         if status != "cleared" {
             tx.rollback().await?;
-            return Err(OffboardingCloseError::NotCleared { offboarding_id, status });
+            return Err(OffboardingCloseError::NotCleared {
+                offboarding_id,
+                status,
+            });
         }
 
         // ── Gather the three cross-module pesangon inputs. These are read-only cross-schema
@@ -349,24 +376,33 @@ impl OffboardingWriteService {
             .current_monthly_salary(company, employee_id)
             .await?
             .ok_or(OffboardingCloseError::MissingSalary { employee_id })?;
-        let unused_leave_days = self.inputs.remaining_leave_days(company, employee_id).await?;
+        let unused_leave_days = self
+            .inputs
+            .remaining_leave_days(company, employee_id)
+            .await?;
 
         // Tenure in years (Decimal) from day-level math: days_between / 365.25.
         let tenure_years = tenure_years(join_date, last_working_day);
 
         // Parse the reason back into the typed enum and run the pure calc.
-        let reason_enum =
-            OffboardingReason::from_str(&reason).map_err(|_| OffboardingCloseError::BadReason(reason.clone()))?;
-        let breakdown =
-            pesangon(reason_enum, tenure_years, monthly_salary, unused_leave_days, &self.cfg)?;
+        let reason_enum = OffboardingReason::from_str(&reason)
+            .map_err(|_| OffboardingCloseError::BadReason(reason.clone()))?;
+        let breakdown = pesangon(
+            reason_enum,
+            tenure_years,
+            monthly_salary,
+            unused_leave_days,
+            &self.cfg,
+        )?;
 
-        // 1. Apply the state change.
+        // 1. Apply the state change (same belt-and-braces company predicate as `clear`).
         sqlx::query(
             r#"UPDATE lifecycle.offboardings
                   SET status = 'closed'
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $2"#,
         )
         .bind(offboarding_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
 

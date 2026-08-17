@@ -40,7 +40,10 @@ pub enum PromotionEffectError {
     NotApproved { promotion_id: Uuid, status: String },
     /// The promotion is approved but its `effective_date` is still in the future.
     #[error("promotion {promotion_id} effective_date {effective_date} has not been reached yet")]
-    NotYetEffective { promotion_id: Uuid, effective_date: chrono::NaiveDate },
+    NotYetEffective {
+        promotion_id: Uuid,
+        effective_date: chrono::NaiveDate,
+    },
     /// The promotion exists but is not `pending` (only a pending promotion may be approved;
     /// an already-`approved` one is a no-op, anything else is a domain violation).
     #[error("promotion {promotion_id} is not pending (status: {status})")]
@@ -204,16 +207,22 @@ impl PromotionWriteService {
         }
         if status != "pending" {
             tx.rollback().await?;
-            return Err(PromotionEffectError::NotPending { promotion_id, status });
+            return Err(PromotionEffectError::NotPending {
+                promotion_id,
+                status,
+            });
         }
 
+        // Belt-and-braces company predicate on the state change: the id was just read under
+        // `FOR UPDATE` inside this scope, so the tenant is written into the statement itself.
         sqlx::query(
             r#"UPDATE lifecycle.promotions
                   SET status = 'approved', approved_by = $2
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $3"#,
         )
         .bind(promotion_id)
         .bind(approved_by)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -292,22 +301,29 @@ impl PromotionWriteService {
         }
         if status != "approved" {
             tx.rollback().await?;
-            return Err(PromotionEffectError::NotApproved { promotion_id, status });
+            return Err(PromotionEffectError::NotApproved {
+                promotion_id,
+                status,
+            });
         }
         // The move takes effect on/after its effective_date (server-local date comparison).
         let today = Utc::now().date_naive();
         if effective_date > today {
             tx.rollback().await?;
-            return Err(PromotionEffectError::NotYetEffective { promotion_id, effective_date });
+            return Err(PromotionEffectError::NotYetEffective {
+                promotion_id,
+                effective_date,
+            });
         }
 
-        // 1. Apply the state change.
+        // 1. Apply the state change (same belt-and-braces company predicate as `approve`).
         sqlx::query(
             r#"UPDATE lifecycle.promotions
                   SET status = 'effective'
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $2"#,
         )
         .bind(promotion_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
 

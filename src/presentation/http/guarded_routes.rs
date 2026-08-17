@@ -36,10 +36,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::application::service::{
-    ClearanceItemWriteService, FinalSettlementError, FinalSettlementWriteService,
-    NewClearanceItem, NewOffboarding, NewOnboarding, NewOnboardingTask, NewPromotion,
-    OffboardingWriteService, OnboardingTaskWriteService, OnboardingWriteService,
-    PromotionWriteService, SettlementAccounts,
+    ClearanceItemWriteService, FinalSettlementError, FinalSettlementWriteService, NewClearanceItem,
+    NewOffboarding, NewOnboarding, NewOnboardingTask, NewPromotion, OffboardingWriteService,
+    OnboardingTaskWriteService, OnboardingWriteService, PromotionWriteService, SettlementAccounts,
 };
 use crate::LifecycleModule;
 
@@ -62,7 +61,14 @@ fn status_of(code: u16) -> StatusCode {
 }
 
 fn err_response(code: &'static str, status: u16, message: String) -> axum::response::Response {
-    (status_of(status), Json(ErrorBody { error: code, message })).into_response()
+    (
+        status_of(status),
+        Json(ErrorBody {
+            error: code,
+            message,
+        }),
+    )
+        .into_response()
 }
 
 // ── Onboardings ─────────────────────────────────────────────────────────────────
@@ -118,9 +124,7 @@ async fn complete_onboarding(
     Path(onboarding_id): Path<Uuid>,
 ) -> axum::response::Response {
     match svc.complete(tenant.company_id, onboarding_id).await {
-        Ok(Some(event_id)) => {
-            (StatusCode::OK, Json(IdResponse { id: event_id })).into_response()
-        }
+        Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already completed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
@@ -142,9 +146,7 @@ async fn confirm_onboarding(
 ) -> axum::response::Response {
     let force = b.map(|Json(b)| b.force).unwrap_or_default();
     match svc.confirm(tenant.company_id, onboarding_id, force).await {
-        Ok(Some(event_id)) => {
-            (StatusCode::OK, Json(IdResponse { id: event_id })).into_response()
-        }
+        Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already confirmed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
@@ -236,7 +238,10 @@ async fn approve_promotion(
     b: Option<Json<ApproveBody>>,
 ) -> axum::response::Response {
     let approved_by = b.map(|Json(b)| b.approved_by).unwrap_or_default();
-    match svc.approve(tenant.company_id, promotion_id, approved_by).await {
+    match svc
+        .approve(tenant.company_id, promotion_id, approved_by)
+        .await
+    {
         Ok(moved) => (StatusCode::OK, Json(OkResponse { ok: moved })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
     }
@@ -248,9 +253,7 @@ async fn effect_promotion(
     Path(promotion_id): Path<Uuid>,
 ) -> axum::response::Response {
     match svc.effect(tenant.company_id, promotion_id).await {
-        Ok(Some(event_id)) => {
-            (StatusCode::OK, Json(IdResponse { id: event_id })).into_response()
-        }
+        Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already effective; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
@@ -322,9 +325,7 @@ async fn close_offboarding(
     Path(offboarding_id): Path<Uuid>,
 ) -> axum::response::Response {
     match svc.close(tenant.company_id, offboarding_id).await {
-        Ok(Some(event_id)) => {
-            (StatusCode::OK, Json(IdResponse { id: event_id })).into_response()
-        }
+        Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already closed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
@@ -502,11 +503,18 @@ fn create_lifecycle_verb_routes(
     let checkpoints = Router::new()
         .route("/onboarding_tasks", post(create_onboarding_task))
         .with_state(tasks)
-        .merge(Router::new().route("/clearance_items", post(create_clearance_item)).with_state(clearance));
+        .merge(
+            Router::new()
+                .route("/clearance_items", post(create_clearance_item))
+                .with_state(clearance),
+        );
 
     let settlements = Router::new()
         .route("/final_settlements/draft", post(draft_final_settlement))
-        .route("/final_settlements/:id/confirm", post(confirm_final_settlement))
+        .route(
+            "/final_settlements/:id/confirm",
+            post(confirm_final_settlement),
+        )
         .with_state(settlements);
 
     Router::new()
@@ -538,11 +546,20 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
     Router::new()
         // Safe base: GET-only for all seven entities.
         .merge(m.readonly_routes())
-        // Checkpoint data keeps generic writes (no cross-entity invariants to bypass;
-        // the notify side effect lives only in the verb, which is additive).
-        .merge(create_onboarding_task_write_routes(m.onboarding_task_service.clone()))
-        .merge(create_clearance_item_write_routes(m.clearance_item_service.clone()))
-        .merge(create_exit_interview_write_routes(m.exit_interview_service.clone()))
+        // Checkpoint rows keep generic writes — they are operator checklist data. The
+        // workflow verbs never trust a stored gate: `complete`/`clear` re-derive the
+        // open-item counts live at verb time under the row lock, so a forged stored
+        // state cannot pass them. What a generic edit CAN skip is the notify side
+        // effect, which lives only in the verb — additive, never load-bearing.
+        .merge(create_onboarding_task_write_routes(
+            m.onboarding_task_service.clone(),
+        ))
+        .merge(create_clearance_item_write_routes(
+            m.clearance_item_service.clone(),
+        ))
+        .merge(create_exit_interview_write_routes(
+            m.exit_interview_service.clone(),
+        ))
         // The workflow carriers: verbs only.
         .merge(create_lifecycle_verb_routes(
             m.onboarding_write_service.clone(),

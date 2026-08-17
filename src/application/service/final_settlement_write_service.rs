@@ -38,7 +38,9 @@
 use crate::application::service::offboarding_ports::OffboardingInputs;
 use crate::application::service::pesangon::{money, pesangon, PesangonConfig};
 use crate::domain::entity::OffboardingReason;
-use backbone_gl_posting::{AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink};
+use backbone_gl_posting::{
+    AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink,
+};
 use backbone_orm::company_scope;
 use chrono::{Datelike, Utc};
 use rust_decimal::Decimal;
@@ -64,8 +66,13 @@ pub enum FinalSettlementError {
     #[error("final settlement {0} not found")]
     NotFound(Uuid),
     /// A settlement already exists for this offboarding (one per offboarding).
-    #[error("a final settlement already exists for offboarding {offboarding_id} ({settlement_id})")]
-    AlreadyDrafted { offboarding_id: Uuid, settlement_id: Uuid },
+    #[error(
+        "a final settlement already exists for offboarding {offboarding_id} ({settlement_id})"
+    )]
+    AlreadyDrafted {
+        offboarding_id: Uuid,
+        settlement_id: Uuid,
+    },
     /// The leaver has no `join_date` — tenure cannot be computed. Fail closed: no draft.
     #[error("cannot compute settlement: employee {employee_id} has no employment join_date")]
     MissingJoinDate { employee_id: Uuid },
@@ -91,6 +98,9 @@ pub enum FinalSettlementError {
     /// Accounting (through the [`GlPostSink`] port) rejected the envelope.
     #[error("GL post rejected ({code}): {message}")]
     GlRejected { code: String, message: String },
+    /// The constructed envelope does not balance — a construction bug, never a data condition.
+    #[error("internal error: settlement envelope does not balance (debits {0} != credits {1})")]
+    Unbalanced(Decimal, Decimal),
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -111,14 +121,14 @@ impl FinalSettlementError {
             FinalSettlementError::NothingToPost(_) => "nothing_to_post",
             FinalSettlementError::TaxRequiresAccount(_, _) => "tax_requires_account",
             FinalSettlementError::GlRejected { .. } => "gl_post_rejected",
+            FinalSettlementError::Unbalanced(_, _) => "envelope_unbalanced",
             FinalSettlementError::Db(_) => "internal_error",
         }
     }
     /// HTTP status for the HTTP surface.
     pub fn http_status(&self) -> u16 {
         match self {
-            FinalSettlementError::OffboardingNotFound(_)
-            | FinalSettlementError::NotFound(_) => 404,
+            FinalSettlementError::OffboardingNotFound(_) | FinalSettlementError::NotFound(_) => 404,
             FinalSettlementError::AlreadyDrafted { .. } => 409,
             FinalSettlementError::MissingJoinDate { .. }
             | FinalSettlementError::MissingSalary { .. }
@@ -128,7 +138,7 @@ impl FinalSettlementError {
             | FinalSettlementError::NothingToPost(_)
             | FinalSettlementError::TaxRequiresAccount(_, _)
             | FinalSettlementError::GlRejected { .. } => 422,
-            FinalSettlementError::Db(_) => 500,
+            FinalSettlementError::Unbalanced(_, _) | FinalSettlementError::Db(_) => 500,
         }
     }
 }
@@ -169,7 +179,12 @@ impl FinalSettlementWriteService {
         cfg: PesangonConfig,
         gl: Arc<dyn GlPostSink>,
     ) -> Self {
-        Self { pool, inputs, cfg, gl }
+        Self {
+            pool,
+            inputs,
+            cfg,
+            gl,
+        }
     }
 
     /// Convenience: pool-backed [`OffboardingInputs`] + current-law [`PesangonConfig`]
@@ -177,7 +192,9 @@ impl FinalSettlementWriteService {
     /// real sink is supplied).
     pub fn with_pool(pool: PgPool) -> Self {
         let inputs = Arc::new(
-            crate::application::service::offboarding_ports::PoolOffboardingInputs::new(pool.clone()),
+            crate::application::service::offboarding_ports::PoolOffboardingInputs::new(
+                pool.clone(),
+            ),
         );
         Self::new(
             pool,
@@ -254,7 +271,10 @@ impl FinalSettlementWriteService {
             .current_monthly_salary(company, employee_id)
             .await?
             .ok_or(FinalSettlementError::MissingSalary { employee_id })?;
-        let unused_leave_days = self.inputs.remaining_leave_days(company, employee_id).await?;
+        let unused_leave_days = self
+            .inputs
+            .remaining_leave_days(company, employee_id)
+            .await?;
 
         let tenure = crate::application::service::offboarding_write_service::tenure_years(
             join_date,
@@ -262,8 +282,13 @@ impl FinalSettlementWriteService {
         );
         let reason_enum = OffboardingReason::from_str(&reason)
             .map_err(|_| FinalSettlementError::BadReason(reason.clone()))?;
-        let breakdown =
-            pesangon(reason_enum, tenure, monthly_salary, unused_leave_days, &self.cfg)?;
+        let breakdown = pesangon(
+            reason_enum,
+            tenure,
+            monthly_salary,
+            unused_leave_days,
+            &self.cfg,
+        )?;
 
         // Final-period base pay: calendar-day proration of the leaving month.
         let base_pay = money(
@@ -388,7 +413,10 @@ impl FinalSettlementWriteService {
         }
         if status != "draft" {
             tx.rollback().await?;
-            return Err(FinalSettlementError::NotDraft { settlement_id, status });
+            return Err(FinalSettlementError::NotDraft {
+                settlement_id,
+                status,
+            });
         }
 
         let severance = pesangon_amount.unwrap_or(Decimal::ZERO);
@@ -418,13 +446,17 @@ impl FinalSettlementWriteService {
             lines.push(
                 GlPostLine::debit(accounts.leave_encashment_expense_account_id, leave)
                     .with_party("employee", employee_id)
-                    .with_description(format!("final settlement leave encashment · period {period}")),
+                    .with_description(format!(
+                        "final settlement leave encashment · period {period}"
+                    )),
             );
         }
         lines.push(
             GlPostLine::credit(accounts.employee_payable_account_id, severance + leave)
                 .with_party("employee", employee_id)
-                .with_description(format!("final settlement payable · offboarding {offboarding_id}")),
+                .with_description(format!(
+                    "final settlement payable · offboarding {offboarding_id}"
+                )),
         );
 
         let envelope = AccountingPostEnvelope {
@@ -443,10 +475,13 @@ impl FinalSettlementWriteService {
             description: Some(format!("final settlement for offboarding {offboarding_id}")),
             lines,
         };
-        debug_assert!(
-            envelope.is_balanced(),
-            "settlement envelope must balance before it is sent"
-        );
+        // Runtime guard, not a debug_assert: the balance must be checked in release builds too.
+        // The credit is constructed as the exact sum of the debits, so this fires only on a
+        // construction bug — but a post that accounting would reject is cheaper to catch here.
+        if !envelope.is_balanced() {
+            let (debits, credits) = envelope.totals();
+            return Err(FinalSettlementError::Unbalanced(debits, credits));
+        }
 
         // Post BEFORE stamping: the row only says "confirmed" once accounting says
         // the post exists. A rejection rolls everything back — the draft stays
@@ -459,16 +494,19 @@ impl FinalSettlementWriteService {
             }
         };
 
+        // Belt-and-braces company predicate: the id was read under lock inside this scope;
+        // writing the tenant into the statement keeps the invariant visible in the SQL itself.
         sqlx::query(
             r#"UPDATE lifecycle.final_settlements
                   SET status = 'confirmed',
                       accounting_post_id = $2,
                       journal_id = $3
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $4"#,
         )
         .bind(settlement_id)
         .bind(ack.post_id)
         .bind(ack.journal_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -484,10 +522,7 @@ pub struct UnwiredGlSink;
 
 #[async_trait::async_trait]
 impl GlPostSink for UnwiredGlSink {
-    async fn post(
-        &self,
-        _envelope: &AccountingPostEnvelope,
-    ) -> Result<GlPostAck, GlPostRejected> {
+    async fn post(&self, _envelope: &AccountingPostEnvelope) -> Result<GlPostAck, GlPostRejected> {
         Err(GlPostRejected {
             code: "gl_seam_unwired".to_string(),
             message: "the GL seam is not wired — supply a GlPostSink to confirm settlements"

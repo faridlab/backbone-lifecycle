@@ -56,7 +56,10 @@ pub enum OnboardingCompleteError {
     NotInProgress { onboarding_id: Uuid, status: String },
     /// One or more mandatory tasks are still open (`pending` or `blocked`).
     #[error("onboarding {onboarding_id} has {open_count} open task(s) (pending/blocked); resolve before completing")]
-    TasksOpen { onboarding_id: Uuid, open_count: i64 },
+    TasksOpen {
+        onboarding_id: Uuid,
+        open_count: i64,
+    },
     /// The onboarding is not `completed` — probation is confirmed on a finished onboarding,
     /// not one still in flight.
     #[error("onboarding {onboarding_id} is not completed (status: {status}); complete it before confirming probation")]
@@ -66,7 +69,10 @@ pub enum OnboardingCompleteError {
     ProbationNotPlanned { onboarding_id: Uuid },
     /// The probation end date has not been reached and the caller did not force.
     #[error("onboarding {onboarding_id} probation ends {probation_end_date}; not reached yet (pass force to override)")]
-    ProbationNotEnded { onboarding_id: Uuid, probation_end_date: chrono::NaiveDate },
+    ProbationNotEnded {
+        onboarding_id: Uuid,
+        probation_end_date: chrono::NaiveDate,
+    },
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -213,15 +219,21 @@ impl OnboardingWriteService {
         }
         if status != "in_progress" {
             tx.rollback().await?;
-            return Err(OnboardingCompleteError::NotInProgress { onboarding_id, status });
+            return Err(OnboardingCompleteError::NotInProgress {
+                onboarding_id,
+                status,
+            });
         }
 
-        // Assert every task is resolved. status::text — `task_status` is a Postgres enum.
+        // Assert every live task is resolved. Soft-deleted tasks are gone for every other
+        // purpose in this module, so they must not hold a completion hostage either.
+        // status::text — `task_status` is a Postgres enum.
         let open_count: i64 = sqlx::query_scalar(
             r#"SELECT count(*) FROM lifecycle.onboarding_tasks
                 WHERE onboarding_id = $1
                   AND company_id = $2
-                  AND status::text IN ('pending', 'blocked')"#,
+                  AND status::text IN ('pending', 'blocked')
+                  AND (metadata->>'deleted_at') IS NULL"#,
         )
         .bind(onboarding_id)
         .bind(company)
@@ -229,16 +241,23 @@ impl OnboardingWriteService {
         .await?;
         if open_count > 0 {
             tx.rollback().await?;
-            return Err(OnboardingCompleteError::TasksOpen { onboarding_id, open_count });
+            return Err(OnboardingCompleteError::TasksOpen {
+                onboarding_id,
+                open_count,
+            });
         }
 
-        // 1. Apply the state change.
+        // 1. Apply the state change. The company predicate is belt-and-braces on top of the
+        //    row fence: the id was just read under `FOR UPDATE` within this scope, so the two
+        //    can never disagree — but writing the tenant explicitly keeps the invariant visible
+        //    in the statement itself.
         sqlx::query(
             r#"UPDATE lifecycle.onboardings
                   SET status = 'completed', completed_at = NOW()
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $2"#,
         )
         .bind(onboarding_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
 
@@ -322,7 +341,10 @@ impl OnboardingWriteService {
         }
         if status != "completed" {
             tx.rollback().await?;
-            return Err(OnboardingCompleteError::NotCompleted { onboarding_id, status });
+            return Err(OnboardingCompleteError::NotCompleted {
+                onboarding_id,
+                status,
+            });
         }
         let probation_end_date = match probation_end_date {
             Some(d) => d,
@@ -334,16 +356,21 @@ impl OnboardingWriteService {
         let today = Utc::now().date_naive();
         if !force && probation_end_date > today {
             tx.rollback().await?;
-            return Err(OnboardingCompleteError::ProbationNotEnded { onboarding_id, probation_end_date });
+            return Err(OnboardingCompleteError::ProbationNotEnded {
+                onboarding_id,
+                probation_end_date,
+            });
         }
 
-        // 1. Apply the state change: stamp the confirmation exactly once.
+        // 1. Apply the state change: stamp the confirmation exactly once (same belt-and-braces
+        //    company predicate as the other state-change writes).
         sqlx::query(
             r#"UPDATE lifecycle.onboardings
                   SET confirmed_at = NOW()
-                WHERE id = $1"#,
+                WHERE id = $1 AND company_id = $2"#,
         )
         .bind(onboarding_id)
+        .bind(company)
         .execute(&mut *tx)
         .await?;
 

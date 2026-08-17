@@ -8,7 +8,7 @@
 //! ## Usage from other modules
 //!
 //! ```text
-//! use lifecycle::exports::{ClearanceItemDto, LifecycleQueryService};
+//! use lifecycle::exports::{ClearanceItemDto};
 //! ```
 
 mod types;
@@ -48,9 +48,6 @@ pub use events::*;
 /// - `PromotionDto` - Data transfer object for Promotion
 /// - `PromotionSummary` - Summary view of Promotion
 /// - `PromotionId` - Type-safe ID wrapper
-///
-/// ## Public Services
-/// - `LifecycleQueryService` - Read-only queries
 ///
 /// ## Public Events
 /// - `ClearanceItemCreatedEvent` - Published when ClearanceItem is created

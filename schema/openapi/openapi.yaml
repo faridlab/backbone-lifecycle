@@ -2900,6 +2900,14 @@ components:
           type: string
         status:
           type: string
+        accounting_post_id:
+          nullable: true
+          type: string
+          format: uuid
+        journal_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -2954,6 +2962,14 @@ components:
           type: string
         status:
           type: string
+        accounting_post_id:
+          nullable: true
+          type: string
+          format: uuid
+        journal_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -2995,6 +3011,14 @@ components:
           type: string
         status:
           type: string
+        accounting_post_id:
+          nullable: true
+          type: string
+          format: uuid
+        journal_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -3027,6 +3051,14 @@ components:
           type: string
         status:
           type: string
+        accounting_post_id:
+          nullable: true
+          type: string
+          format: uuid
+        journal_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -3207,6 +3239,14 @@ components:
           nullable: true
           type: string
           format: date-time
+        probation_end_date:
+          nullable: true
+          type: string
+          format: date
+        confirmed_at:
+          nullable: true
+          type: string
+          format: date-time
         template_id:
           nullable: true
           type: string
@@ -3251,6 +3291,14 @@ components:
           nullable: true
           type: string
           format: date-time
+        probation_end_date:
+          nullable: true
+          type: string
+          format: date
+        confirmed_at:
+          nullable: true
+          type: string
+          format: date-time
         template_id:
           nullable: true
           type: string
@@ -3282,6 +3330,14 @@ components:
           nullable: true
           type: string
           format: date-time
+        probation_end_date:
+          nullable: true
+          type: string
+          format: date
+        confirmed_at:
+          nullable: true
+          type: string
+          format: date-time
         template_id:
           nullable: true
           type: string
@@ -3304,6 +3360,14 @@ components:
         status:
           type: string
         completed_at:
+          nullable: true
+          type: string
+          format: date-time
+        probation_end_date:
+          nullable: true
+          type: string
+          format: date
+        confirmed_at:
           nullable: true
           type: string
           format: date-time

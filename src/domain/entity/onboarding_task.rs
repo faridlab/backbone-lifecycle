@@ -66,7 +66,7 @@ pub struct OnboardingTask {
 impl OnboardingTask {
     /// Create a builder for OnboardingTask
     pub fn builder() -> OnboardingTaskBuilder {
-        OnboardingTaskBuilder::default()
+        <OnboardingTaskBuilder as Default>::default()
     }
 
     /// Create a new OnboardingTask with required fields
@@ -334,7 +334,7 @@ impl OnboardingTaskBuilder {
             category: self.category,
             owner_employee_id: self.owner_employee_id,
             due_date: self.due_date,
-            status: self.status.unwrap_or(TaskStatus::default()),
+            status: self.status.unwrap_or_default(),
             metadata: AuditMetadata::default(),
         })
     }

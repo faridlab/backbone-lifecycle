@@ -13,7 +13,7 @@ module: lifecycle
 version: 2
 schema: lifecycle
 
-# ADR-0014 company fence (Wave 1 P0 sweep, 2026-08-16): onboarding / offboarding / promotion records are company-private (pillar-hrms H-8).
+# ADR-0014 company fence: onboarding / offboarding / promotion records are company-private.
 company_fence: strict
 description: "lifecycle domain module"
 

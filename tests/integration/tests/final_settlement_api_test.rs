@@ -34,6 +34,8 @@ impl TestDataGenerator for FinalSettlementTestData {
             "tax_deduction": null,
             "net_payable": 0,
             "status": "draft",
+            "accounting_post_id": null,
+            "journal_id": null,
             "metadata": json!({}),
         })
     }
@@ -52,6 +54,8 @@ impl TestDataGenerator for FinalSettlementTestData {
             "tax_deduction": null,
             "net_payable": 0,
             "status": "draft",
+            "accounting_post_id": null,
+            "journal_id": null,
             "metadata": json!({}),
         })
     }

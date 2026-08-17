@@ -178,6 +178,8 @@ pub struct FinalSettlementDto {
     pub tax_deduction: Option<Decimal>,
     pub net_payable: Decimal,
     pub status: SettlementStatus,
+    pub accounting_post_id: Option<Uuid>,
+    pub journal_id: Option<Uuid>,
     pub metadata: serde_json::Value,
 }
 
@@ -297,6 +299,8 @@ pub struct OnboardingDto {
     pub start_date: NaiveDate,
     pub status: OnboardingStatus,
     pub completed_at: Option<DateTime<Utc>>,
+    pub probation_end_date: Option<NaiveDate>,
+    pub confirmed_at: Option<DateTime<Utc>>,
     pub template_id: Option<Uuid>,
     pub metadata: serde_json::Value,
 }

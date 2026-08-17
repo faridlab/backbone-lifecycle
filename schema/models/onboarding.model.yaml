@@ -42,6 +42,14 @@ models:
         type: datetime?
         description: "When onboarding was marked completed"
 
+      probation_end_date:
+        type: date?
+        description: "Planned probation end; confirmation is allowed on/after this date"
+
+      confirmed_at:
+        type: datetime?
+        description: "When probation was confirmed (stamps the lifecycle.probation_confirmed emit)"
+
       template_id:
         type: uuid?
         attributes: ["@exclude_from_foreign_key_check"]

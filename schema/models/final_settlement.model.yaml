@@ -70,6 +70,16 @@ models:
         attributes: ["@required", "@default(draft)"]
         description: "Settlement status"
 
+      accounting_post_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "GL post created at confirmation # logical FK accounting.Post.id"
+
+      journal_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "GL journal of the confirmation post # logical FK accounting.Journal.id"
+
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

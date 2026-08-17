@@ -29,6 +29,8 @@ impl TestDataGenerator for OnboardingTestData {
             "start_date": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "pending",
             "completed_at": now,
+            "probation_end_date": null,
+            "confirmed_at": now,
             "template_id": null,
             "metadata": json!({}),
         })
@@ -43,6 +45,8 @@ impl TestDataGenerator for OnboardingTestData {
             "start_date": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "pending",
             "completed_at": now,
+            "probation_end_date": null,
+            "confirmed_at": now,
             "template_id": null,
             "metadata": json!({}),
         })

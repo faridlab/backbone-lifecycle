@@ -55,6 +55,8 @@ pub struct Onboarding {
     pub start_date: NaiveDate,
     pub status: OnboardingStatus,
     pub completed_at: Option<DateTime<Utc>>,
+    pub probation_end_date: Option<NaiveDate>,
+    pub confirmed_at: Option<DateTime<Utc>>,
     pub template_id: Option<Uuid>,
     #[serde(default)]
     #[sqlx(json)]
@@ -64,7 +66,7 @@ pub struct Onboarding {
 impl Onboarding {
     /// Create a builder for Onboarding
     pub fn builder() -> OnboardingBuilder {
-        OnboardingBuilder::default()
+        <OnboardingBuilder as Default>::default()
     }
 
     /// Create a new Onboarding with required fields
@@ -76,6 +78,8 @@ impl Onboarding {
             start_date,
             status,
             completed_at: None,
+            probation_end_date: None,
+            confirmed_at: None,
             template_id: None,
             metadata: AuditMetadata::default(),
         }
@@ -147,6 +151,18 @@ impl Onboarding {
         self
     }
 
+    /// Set the probation_end_date field (chainable)
+    pub fn with_probation_end_date(mut self, value: NaiveDate) -> Self {
+        self.probation_end_date = Some(value);
+        self
+    }
+
+    /// Set the confirmed_at field (chainable)
+    pub fn with_confirmed_at(mut self, value: DateTime<Utc>) -> Self {
+        self.confirmed_at = Some(value);
+        self
+    }
+
     /// Set the template_id field (chainable)
     pub fn with_template_id(mut self, value: Uuid) -> Self {
         self.template_id = Some(value);
@@ -175,6 +191,12 @@ impl Onboarding {
                 }
                 "completed_at" => {
                     if let Ok(v) = serde_json::from_value(value) { self.completed_at = v; }
+                }
+                "probation_end_date" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.probation_end_date = v; }
+                }
+                "confirmed_at" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.confirmed_at = v; }
                 }
                 "template_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.template_id = v; }
@@ -258,6 +280,8 @@ pub struct OnboardingBuilder {
     start_date: Option<NaiveDate>,
     status: Option<OnboardingStatus>,
     completed_at: Option<DateTime<Utc>>,
+    probation_end_date: Option<NaiveDate>,
+    confirmed_at: Option<DateTime<Utc>>,
     template_id: Option<Uuid>,
 }
 
@@ -292,6 +316,18 @@ impl OnboardingBuilder {
         self
     }
 
+    /// Set the probation_end_date field (optional)
+    pub fn probation_end_date(mut self, value: NaiveDate) -> Self {
+        self.probation_end_date = Some(value);
+        self
+    }
+
+    /// Set the confirmed_at field (optional)
+    pub fn confirmed_at(mut self, value: DateTime<Utc>) -> Self {
+        self.confirmed_at = Some(value);
+        self
+    }
+
     /// Set the template_id field (optional)
     pub fn template_id(mut self, value: Uuid) -> Self {
         self.template_id = Some(value);
@@ -311,8 +347,10 @@ impl OnboardingBuilder {
             company_id,
             employee_id,
             start_date,
-            status: self.status.unwrap_or(OnboardingStatus::default()),
+            status: self.status.unwrap_or_default(),
             completed_at: self.completed_at,
+            probation_end_date: self.probation_end_date,
+            confirmed_at: self.confirmed_at,
             template_id: self.template_id,
             metadata: AuditMetadata::default(),
         })

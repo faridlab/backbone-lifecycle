@@ -65,7 +65,7 @@ pub struct Offboarding {
 impl Offboarding {
     /// Create a builder for Offboarding
     pub fn builder() -> OffboardingBuilder {
-        OffboardingBuilder::default()
+        <OffboardingBuilder as Default>::default()
     }
 
     /// Create a new Offboarding with required fields
@@ -296,10 +296,10 @@ impl OffboardingBuilder {
             id: Uuid::new_v4(),
             company_id,
             employee_id,
-            reason: self.reason.unwrap_or(OffboardingReason::default()),
+            reason: self.reason.unwrap_or_default(),
             notice_date,
             last_working_day,
-            status: self.status.unwrap_or(OffboardingStatus::default()),
+            status: self.status.unwrap_or_default(),
             metadata: AuditMetadata::default(),
         })
     }

@@ -45,6 +45,10 @@ pub struct CreateOnboardingDto {
     pub status: OnboardingStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "completed_at")]
     pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "probation_end_date")]
+    pub probation_end_date: Option<NaiveDate>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "confirmed_at")]
+    pub confirmed_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "template_id")]
     pub template_id: Option<Uuid>,
 }
@@ -74,6 +78,10 @@ pub struct UpdateOnboardingDto {
     pub status: OnboardingStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "completed_at")]
     pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "probation_end_date")]
+    pub probation_end_date: Option<NaiveDate>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "confirmed_at")]
+    pub confirmed_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "template_id")]
     pub template_id: Option<Uuid>,
 }
@@ -104,6 +112,10 @@ pub struct PatchOnboardingDto {
     pub status: Option<OnboardingStatus>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "completed_at")]
     pub completed_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "probation_end_date")]
+    pub probation_end_date: Option<NaiveDate>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "confirmed_at")]
+    pub confirmed_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "template_id")]
     pub template_id: Option<Uuid>,
 }
@@ -111,7 +123,7 @@ pub struct PatchOnboardingDto {
 impl PatchOnboardingDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.start_date.is_some() || self.status.is_some() || self.completed_at.is_some() || self.template_id.is_some()
+        self.company_id.is_some() || self.employee_id.is_some() || self.start_date.is_some() || self.status.is_some() || self.completed_at.is_some() || self.probation_end_date.is_some() || self.confirmed_at.is_some() || self.template_id.is_some()
     }
 }
 
@@ -137,6 +149,8 @@ pub struct OnboardingResponseDto {
     pub start_date: NaiveDate,
     pub status: OnboardingStatus,
     pub completed_at: Option<DateTime<Utc>>,
+    pub probation_end_date: Option<NaiveDate>,
+    pub confirmed_at: Option<DateTime<Utc>>,
     pub template_id: Option<Uuid>,
     pub metadata: AuditMetadata,
 }
@@ -214,6 +228,8 @@ impl From<Onboarding> for OnboardingResponseDto {
             start_date: entity.start_date,
             status: entity.status,
             completed_at: entity.completed_at,
+            probation_end_date: entity.probation_end_date,
+            confirmed_at: entity.confirmed_at,
             template_id: entity.template_id,
             metadata: entity.metadata,
         }
@@ -242,6 +258,8 @@ impl From<CreateOnboardingDto> for Onboarding {
             start_date: dto.start_date,
             status: dto.status,
             completed_at: dto.completed_at,
+            probation_end_date: dto.probation_end_date,
+            confirmed_at: dto.confirmed_at,
             template_id: dto.template_id,
             metadata: AuditMetadata::default(),
         }
@@ -257,6 +275,8 @@ impl From<&Onboarding> for OnboardingResponseDto {
             start_date: entity.start_date.clone(),
             status: entity.status.clone(),
             completed_at: entity.completed_at.clone(),
+            probation_end_date: entity.probation_end_date.clone(),
+            confirmed_at: entity.confirmed_at.clone(),
             template_id: entity.template_id.clone(),
             metadata: entity.metadata.clone(),
         }
@@ -276,6 +296,8 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingDto> for Onboarding {
         self.start_date = dto.start_date;
         self.status = dto.status;
         self.completed_at = dto.completed_at;
+        self.probation_end_date = dto.probation_end_date;
+        self.confirmed_at = dto.confirmed_at;
         self.template_id = dto.template_id;
         Ok(self)
     }

@@ -56,6 +56,10 @@ pub struct CreateFinalSettlementDto {
     #[serde(alias = "net_payable")]
     pub net_payable: Decimal,
     pub status: SettlementStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
+    pub accounting_post_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "journal_id")]
+    pub journal_id: Option<Uuid>,
 }
 
 // =============================================================================
@@ -93,6 +97,10 @@ pub struct UpdateFinalSettlementDto {
     #[serde(alias = "net_payable")]
     pub net_payable: Decimal,
     pub status: SettlementStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
+    pub accounting_post_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "journal_id")]
+    pub journal_id: Option<Uuid>,
 }
 
 // =============================================================================
@@ -132,12 +140,16 @@ pub struct PatchFinalSettlementDto {
     pub net_payable: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<SettlementStatus>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
+    pub accounting_post_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "journal_id")]
+    pub journal_id: Option<Uuid>,
 }
 
 impl PatchFinalSettlementDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some()
+        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
     }
 }
 
@@ -169,6 +181,8 @@ pub struct FinalSettlementResponseDto {
     pub tax_deduction: Option<Decimal>,
     pub net_payable: Decimal,
     pub status: SettlementStatus,
+    pub accounting_post_id: Option<Uuid>,
+    pub journal_id: Option<Uuid>,
     pub metadata: AuditMetadata,
 }
 
@@ -250,6 +264,8 @@ impl From<FinalSettlement> for FinalSettlementResponseDto {
             tax_deduction: entity.tax_deduction,
             net_payable: entity.net_payable,
             status: entity.status,
+            accounting_post_id: entity.accounting_post_id,
+            journal_id: entity.journal_id,
             metadata: entity.metadata,
         }
     }
@@ -282,6 +298,8 @@ impl From<CreateFinalSettlementDto> for FinalSettlement {
             tax_deduction: dto.tax_deduction,
             net_payable: dto.net_payable,
             status: dto.status,
+            accounting_post_id: dto.accounting_post_id,
+            journal_id: dto.journal_id,
             metadata: AuditMetadata::default(),
         }
     }
@@ -301,6 +319,8 @@ impl From<&FinalSettlement> for FinalSettlementResponseDto {
             tax_deduction: entity.tax_deduction.clone(),
             net_payable: entity.net_payable.clone(),
             status: entity.status.clone(),
+            accounting_post_id: entity.accounting_post_id.clone(),
+            journal_id: entity.journal_id.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -324,6 +344,8 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
         self.tax_deduction = dto.tax_deduction;
         self.net_payable = dto.net_payable;
         self.status = dto.status;
+        self.accounting_post_id = dto.accounting_post_id;
+        self.journal_id = dto.journal_id;
         Ok(self)
     }
 }

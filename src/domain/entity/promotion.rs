@@ -76,7 +76,7 @@ pub struct Promotion {
 impl Promotion {
     /// Create a builder for Promotion
     pub fn builder() -> PromotionBuilder {
-        PromotionBuilder::default()
+        <PromotionBuilder as Default>::default()
     }
 
     /// Create a new Promotion with required fields
@@ -487,7 +487,7 @@ impl PromotionBuilder {
             id: Uuid::new_v4(),
             company_id,
             employee_id,
-            promotion_type: self.promotion_type.unwrap_or(PromotionType::default()),
+            promotion_type: self.promotion_type.unwrap_or_default(),
             position_id_from: self.position_id_from,
             position_id_to: self.position_id_to,
             level_id_from: self.level_id_from,
@@ -496,7 +496,7 @@ impl PromotionBuilder {
             department_id_to: self.department_id_to,
             proposed_salary: self.proposed_salary,
             effective_date,
-            status: self.status.unwrap_or(PromotionStatus::default()),
+            status: self.status.unwrap_or_default(),
             requested_by: self.requested_by,
             approved_by: self.approved_by,
             appraisal_id: self.appraisal_id,

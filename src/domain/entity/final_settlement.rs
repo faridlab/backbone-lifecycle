@@ -61,6 +61,8 @@ pub struct FinalSettlement {
     pub tax_deduction: Option<Decimal>,
     pub net_payable: Decimal,
     pub status: SettlementStatus,
+    pub accounting_post_id: Option<Uuid>,
+    pub journal_id: Option<Uuid>,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -69,7 +71,7 @@ pub struct FinalSettlement {
 impl FinalSettlement {
     /// Create a builder for FinalSettlement
     pub fn builder() -> FinalSettlementBuilder {
-        FinalSettlementBuilder::default()
+        <FinalSettlementBuilder as Default>::default()
     }
 
     /// Create a new FinalSettlement with required fields
@@ -86,6 +88,8 @@ impl FinalSettlement {
             tax_deduction: None,
             net_payable,
             status,
+            accounting_post_id: None,
+            journal_id: None,
             metadata: AuditMetadata::default(),
         }
     }
@@ -168,6 +172,18 @@ impl FinalSettlement {
         self
     }
 
+    /// Set the accounting_post_id field (chainable)
+    pub fn with_accounting_post_id(mut self, value: Uuid) -> Self {
+        self.accounting_post_id = Some(value);
+        self
+    }
+
+    /// Set the journal_id field (chainable)
+    pub fn with_journal_id(mut self, value: Uuid) -> Self {
+        self.journal_id = Some(value);
+        self
+    }
+
     // ==========================================================
     // Partial Update
     // ==========================================================
@@ -205,6 +221,12 @@ impl FinalSettlement {
                 }
                 "status" => {
                     if let Ok(v) = serde_json::from_value(value) { self.status = v; }
+                }
+                "accounting_post_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.accounting_post_id = v; }
+                }
+                "journal_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.journal_id = v; }
                 }
                 _ => {} // ignore unknown fields
             }
@@ -263,6 +285,8 @@ impl backbone_orm::EntityRepoMeta for FinalSettlement {
         m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("offboarding_id".to_string(), "uuid".to_string());
+        m.insert("accounting_post_id".to_string(), "uuid".to_string());
+        m.insert("journal_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "settlement_status".to_string());
         m
     }
@@ -290,6 +314,8 @@ pub struct FinalSettlementBuilder {
     tax_deduction: Option<Decimal>,
     net_payable: Option<Decimal>,
     status: Option<SettlementStatus>,
+    accounting_post_id: Option<Uuid>,
+    journal_id: Option<Uuid>,
 }
 
 impl FinalSettlementBuilder {
@@ -353,6 +379,18 @@ impl FinalSettlementBuilder {
         self
     }
 
+    /// Set the accounting_post_id field (optional)
+    pub fn accounting_post_id(mut self, value: Uuid) -> Self {
+        self.accounting_post_id = Some(value);
+        self
+    }
+
+    /// Set the journal_id field (optional)
+    pub fn journal_id(mut self, value: Uuid) -> Self {
+        self.journal_id = Some(value);
+        self
+    }
+
     /// Build the FinalSettlement entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -375,7 +413,9 @@ impl FinalSettlementBuilder {
             pesangon_amount: self.pesangon_amount,
             tax_deduction: self.tax_deduction,
             net_payable,
-            status: self.status.unwrap_or(SettlementStatus::default()),
+            status: self.status.unwrap_or_default(),
+            accounting_post_id: self.accounting_post_id,
+            journal_id: self.journal_id,
             metadata: AuditMetadata::default(),
         })
     }

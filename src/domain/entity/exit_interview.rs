@@ -62,7 +62,7 @@ pub struct ExitInterview {
 impl ExitInterview {
     /// Create a builder for ExitInterview
     pub fn builder() -> ExitInterviewBuilder {
-        ExitInterviewBuilder::default()
+        <ExitInterviewBuilder as Default>::default()
     }
 
     /// Create a new ExitInterview with required fields

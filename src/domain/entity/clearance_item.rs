@@ -63,7 +63,7 @@ pub struct ClearanceItem {
 impl ClearanceItem {
     /// Create a builder for ClearanceItem
     pub fn builder() -> ClearanceItemBuilder {
-        ClearanceItemBuilder::default()
+        <ClearanceItemBuilder as Default>::default()
     }
 
     /// Create a new ClearanceItem with required fields
@@ -294,7 +294,7 @@ impl ClearanceItemBuilder {
             offboarding_id,
             title,
             clearer_employee_id: self.clearer_employee_id,
-            status: self.status.unwrap_or(ClearanceStatus::default()),
+            status: self.status.unwrap_or_default(),
             metadata: AuditMetadata::default(),
         })
     }

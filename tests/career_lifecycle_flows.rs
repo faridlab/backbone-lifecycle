@@ -26,15 +26,57 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-/// Connect to the test DB, or `None` to skip.
+/// Connect to a scratch DB this suite owns, or `None` to skip.
+///
+/// The suite builds its own minimal DDL (see [`setup`]), which must NOT run against a
+/// fully-migrated database: the real migrations carry stricter constraints than the
+/// best-effort shapes here, and the two disagree (a migrated `promotions.title`-style
+/// NOT NULL, for instance, breaks the hermetic seeds). So the suite provisions a
+/// dedicated database it drops and recreates on every run — hermetic by construction.
 async fn connect() -> Option<PgPool> {
     let url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/backbone_hr".into());
-    match PgPool::connect(&url).await {
+    let (prefix, _) = url.trim_end_matches('/').rsplit_once('/')?;
+    let admin = match PgPool::connect(&format!("{prefix}/postgres")).await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("skip career_lifecycle_flows: no admin connection from `{prefix}` ({e})");
+            return None;
+        }
+    };
+    let scratch = "lifecycle_flows_test";
+    let _ = sqlx::query(&format!(r#"DROP DATABASE IF EXISTS "{scratch}" WITH (FORCE)"#))
+        .execute(&admin)
+        .await;
+    if let Err(e) = sqlx::query(&format!(r#"CREATE DATABASE "{scratch}""#)).execute(&admin).await {
+        eprintln!("skip career_lifecycle_flows: could not create `{scratch}` ({e})");
+        return None;
+    }
+    admin.close().await;
+    match PgPool::connect(&format!("{prefix}/{scratch}")).await {
         Ok(p) => Some(p),
         Err(e) => {
-            eprintln!("skip career_lifecycle_flows: could not connect to `{url}` ({e}); set DATABASE_URL to run");
+            eprintln!("skip career_lifecycle_flows: could not connect to `{scratch}` ({e})");
             None
+        }
+    }
+}
+
+/// Run the framework outbox migration, retrying the narrow race where a sibling test's concurrent
+/// `CREATE TYPE ... IF NOT EXISTS` slips between our check and insert and the loser gets a pg_type
+/// duplicate-key (23505). The loser's next attempt sees everything existing and succeeds — any other
+/// error is real.
+async fn migrate_outbox_with_race_retry(pool: &PgPool, schema: &str) {
+    for attempt in 0..3 {
+        match outbox::migrate(pool, schema).await {
+            Ok(()) => return,
+            Err(e) => {
+                let is_race = matches!(&e, backbone_outbox::OutboxError::Db(sqlx::Error::Database(db)) if db.code().as_deref() == Some("23505"));
+                if !is_race || attempt == 2 {
+                    panic!("outbox migrate {schema}: {e}");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
         }
     }
 }
@@ -46,8 +88,9 @@ async fn connect() -> Option<PgPool> {
 /// concurrent setup() calls can both see "not exists", both try to create, and the loser raises a
 /// duplicate-key error even though the shape ends up existing. Ignoring the result is the right call
 /// because every statement is an "ensure-exists" — a real DDL bug surfaces later as a clear
-/// missing-table error in the seed/assert phase. The framework `outbox::migrate` is itself
-/// idempotent + concurrency-safe.
+/// missing-table error in the seed/assert phase. The framework `outbox::migrate` calls get the same
+/// treatment via a narrow retry (`migrate_outbox_with_race_retry`) because their internal
+/// catch-duplicates logic can still lose the same race on `pg_type`.
 async fn setup(pool: &PgPool) -> sqlx::Result<()> {
     let shape_ddl = [
         // Enum types the producer/consumer SQL depends on.
@@ -58,6 +101,8 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
         "CREATE TYPE task_status AS ENUM ('pending','done','skipped','blocked')",
         "CREATE TYPE offboarding_reason AS ENUM ('resignation','termination','end_of_contract','retirement','death','merger_acquisition','efficiency','force_majeure','misconduct')",
         "CREATE TYPE offboarding_status AS ENUM ('initiated','in_progress','cleared','closed')",
+        "CREATE TYPE clearance_status AS ENUM ('pending','cleared','blocked')",
+        "CREATE TYPE settlement_status AS ENUM ('draft','confirmed','paid','disputed')",
         "CREATE TYPE employment_status AS ENUM ('permanent','contract','probation','associate')",
         "CREATE TYPE employment_state AS ENUM ('active','inactive')",
         "CREATE TYPE employment_action AS ENUM ('hire','transfer','promotion','demotion','role_change','reinstatement')",
@@ -78,6 +123,9 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
                proposed_salary NUMERIC(18,2),
                effective_date DATE NOT NULL,
                status promotion_status NOT NULL DEFAULT 'draft',
+               requested_by UUID,
+               approved_by UUID,
+               reason TEXT,
                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.onboardings (
@@ -87,6 +135,9 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
                start_date DATE NOT NULL,
                status onboarding_status NOT NULL DEFAULT 'pending',
                completed_at TIMESTAMPTZ,
+               probation_end_date DATE,
+               confirmed_at TIMESTAMPTZ,
+               template_id UUID,
                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.onboarding_tasks (
@@ -95,6 +146,8 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
                onboarding_id UUID NOT NULL,
                title TEXT NOT NULL,
                category task_category,
+               owner_employee_id UUID,
+               due_date DATE,
                status task_status NOT NULL DEFAULT 'pending',
                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
            )"#,
@@ -108,6 +161,33 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
                status offboarding_status NOT NULL DEFAULT 'initiated',
                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
            )"#,
+        r#"CREATE TABLE IF NOT EXISTS lifecycle.clearance_items (
+               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               company_id UUID NOT NULL,
+               offboarding_id UUID NOT NULL,
+               title TEXT NOT NULL,
+               clearer_employee_id UUID,
+               status clearance_status NOT NULL DEFAULT 'pending',
+               metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+           )"#,
+        r#"CREATE TABLE IF NOT EXISTS lifecycle.final_settlements (
+               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               company_id UUID NOT NULL,
+               employee_id UUID NOT NULL,
+               offboarding_id UUID NOT NULL,
+               period TEXT NOT NULL,
+               base_pay NUMERIC(18,2) NOT NULL,
+               unused_leave_payout NUMERIC(18,2),
+               pesangon_amount NUMERIC(18,2),
+               tax_deduction NUMERIC(18,2),
+               net_payable NUMERIC(18,2) NOT NULL,
+               status settlement_status NOT NULL DEFAULT 'draft',
+               accounting_post_id UUID,
+               journal_id UUID,
+               metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+           )"#,
+        // One live settlement per offboarding — the idempotency the draft verb surfaces as 409.
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_final_settlements_offboarding ON lifecycle.final_settlements (company_id, offboarding_id) WHERE (metadata->>'deleted_at') IS NULL",
         // ── employee.* (the employee consumers write these). The employments shape is a SUPERSET of
         //    backbone-recruitment's hire_flow test (department_id/position_id) so the two hermetic
         //    suites coexist on a shared DB — CREATE TABLE IF NOT EXISTS no-ops on whichever runs second,
@@ -178,14 +258,12 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
         let _ = sqlx::query(stmt).execute(pool).await;
     }
 
-    // Outbox + inbox tables (framework DDL) in every schema the flows touch. `outbox::migrate` is
-    // idempotent and concurrency-safe (CREATE ... IF NOT EXISTS + caught duplicates). `timeoff` is a
+    // Outbox + inbox tables (framework DDL) in every schema the flows touch. `timeoff` is a
     // CONSUMER schema (its outbox_events is unused) — we migrate it so its `inbox_consumed` exists for
     // the offboarding-encash handler's `inbox::once`.
-    outbox::migrate(pool, "lifecycle").await.expect("outbox migrate lifecycle");
-    outbox::migrate(pool, "employee").await.expect("outbox migrate employee");
-    outbox::migrate(pool, "payroll").await.expect("outbox migrate payroll");
-    outbox::migrate(pool, "timeoff").await.expect("outbox migrate timeoff");
+    for schema in ["lifecycle", "employee", "payroll", "timeoff"] {
+        migrate_outbox_with_race_retry(pool, schema).await;
+    }
 
     Ok(())
 }
@@ -193,7 +271,7 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
 /// Isolate a flow from any prior data in the shared shapes.
 async fn truncate_all(pool: &PgPool) -> sqlx::Result<()> {
     for stmt in [
-        "TRUNCATE lifecycle.promotions, lifecycle.onboardings, lifecycle.onboarding_tasks, lifecycle.offboardings",
+        "TRUNCATE lifecycle.promotions, lifecycle.onboardings, lifecycle.onboarding_tasks, lifecycle.offboardings, lifecycle.clearance_items, lifecycle.final_settlements",
         "TRUNCATE employee.employment_histories, employee.employments, employee.employees",
         "TRUNCATE payroll.compensation_changes",
         "TRUNCATE timeoff.timeoff_balances",
@@ -290,7 +368,7 @@ async fn promotion_effective_flow_applies_both_targets_and_is_idempotent() -> Re
 
     // ── 1. PRODUCER: effect() flips approved→effective + stages promotion.effective, in one tx. ──
     let svc = PromotionWriteService::new(pool.clone());
-    let event_id = svc.effect(promotion_id).await?.expect("fresh effect stages an event");
+    let event_id = svc.effect(company_id, promotion_id).await?.expect("fresh effect stages an event");
 
     let promo_status: String =
         sqlx::query_scalar("SELECT status::text FROM lifecycle.promotions WHERE id=$1")
@@ -387,19 +465,20 @@ async fn promotion_effective_is_idempotent_at_the_producer() -> Result<(), Box<d
     setup(&pool).await?;
     truncate_all(&pool).await?;
 
+    let company_id = Uuid::new_v4();
     let promotion_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.promotions (company_id, employee_id, effective_date, status)
            VALUES ($1,$2,NOW(),'approved') RETURNING id"#,
     )
-    .bind(Uuid::new_v4())
+    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
     .get("id");
 
     let svc = PromotionWriteService::new(pool.clone());
-    let first = svc.effect(promotion_id).await?.expect("first effect stages an event");
-    let second = svc.effect(promotion_id).await?;
+    let first = svc.effect(company_id, promotion_id).await?.expect("first effect stages an event");
+    let second = svc.effect(company_id, promotion_id).await?;
     assert!(second.is_none(), "re-effect of an effective promotion stages no second event");
     assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 1, "still one event — id {first}");
     Ok(())
@@ -443,7 +522,7 @@ async fn onboarding_completed_flow_activates_employment_and_is_idempotent() -> R
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc.complete(onboarding_id).await?.expect("fresh complete stages an event");
+    let event_id = svc.complete(company_id, onboarding_id).await?.expect("fresh complete stages an event");
 
     let ob = sqlx::query("SELECT status::text AS status, completed_at FROM lifecycle.onboardings WHERE id=$1")
         .bind(onboarding_id)
@@ -498,11 +577,12 @@ async fn onboarding_complete_rejects_open_tasks() -> Result<(), Box<dyn std::err
     setup(&pool).await?;
     truncate_all(&pool).await?;
 
+    let company_id = Uuid::new_v4();
     let onboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
            VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(Uuid::new_v4())
+    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
@@ -512,13 +592,13 @@ async fn onboarding_complete_rejects_open_tasks() -> Result<(), Box<dyn std::err
         r#"INSERT INTO lifecycle.onboarding_tasks (company_id, onboarding_id, title, status)
            VALUES ($1,$2,'collect docs','pending')"#,
     )
-    .bind(Uuid::new_v4())
+    .bind(company_id)
     .bind(onboarding_id)
     .execute(&pool)
     .await?;
 
     let svc = OnboardingWriteService::new(pool.clone());
-    let res = svc.complete(onboarding_id).await;
+    let res = svc.complete(company_id, onboarding_id).await;
     assert!(res.is_err(), "complete() rejects when a task is still pending");
     assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 0, "no event staged on rejection");
     Ok(())
@@ -590,7 +670,7 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent() -> 
     // with_pool = pool-backed inputs + current-law pesangon config (the same wiring the lifecycle
     // module builder uses by default).
     let svc = OffboardingWriteService::with_pool(pool.clone());
-    let event_id = svc.close(offboarding_id).await?.expect("fresh close stages an event");
+    let event_id = svc.close(company_id, offboarding_id).await?.expect("fresh close stages an event");
 
     let ob_status: String =
         sqlx::query_scalar("SELECT status::text FROM lifecycle.offboardings WHERE id=$1")
@@ -748,7 +828,7 @@ async fn offboarding_closed_also_zeroes_leave_balance_and_is_idempotent() -> Res
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OffboardingWriteService::with_pool(pool.clone());
-    let event_id = svc.close(offboarding_id).await?.expect("fresh close stages an event");
+    let event_id = svc.close(company_id, offboarding_id).await?.expect("fresh close stages an event");
     assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 1, "one event staged");
 
     // ── 2. RELAY → CONSUMER (the timeoff encash target). ───────────────────────────────────────
@@ -846,7 +926,7 @@ async fn onboarding_completed_also_seeds_initial_compensation_and_is_idempotent(
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc.complete(onboarding_id).await?.expect("fresh complete stages an event");
+    let event_id = svc.complete(company_id, onboarding_id).await?.expect("fresh complete stages an event");
     assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 1, "one event staged");
 
     // ── 2. RELAY → CONSUMER (the payroll enroll target). ──────────────────────────────────────
@@ -941,7 +1021,7 @@ async fn onboarding_enrolled_skips_when_no_starting_salary() -> Result<(), Box<d
     .get("id");
 
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc.complete(onboarding_id).await?.expect("fresh complete stages an event");
+    let event_id = svc.complete(company_id, onboarding_id).await?.expect("fresh complete stages an event");
 
     let bus = IntegrationEventBus::new();
     bus.register_handler(std::sync::Arc::new(
@@ -962,5 +1042,509 @@ async fn onboarding_enrolled_skips_when_no_starting_salary() -> Result<(), Box<d
         inbox::was_consumed(&pool, "payroll", "onboarding.enroll", event_id).await?,
         "the event was still CLAIMED — a replay is a no-op even with no salary"
     );
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Fakes for the outbound seams (the probes below wire these where production wires real adapters).
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Records every scheduled activity so a probe can assert the post-commit notify.
+struct RecordingActivitySink(std::sync::Mutex<Vec<backbone_lifecycle::application::service::ActivityCommand>>);
+
+#[async_trait::async_trait]
+impl backbone_lifecycle::application::service::ActivitySink for RecordingActivitySink {
+    async fn schedule(
+        &self,
+        cmd: backbone_lifecycle::application::service::ActivityCommand,
+    ) -> Result<backbone_lifecycle::application::service::ActivityAck, backbone_lifecycle::application::service::ActivityRejected> {
+        self.0.lock().unwrap().push(cmd);
+        Ok(backbone_lifecycle::application::service::ActivityAck {
+            activity_id: Uuid::new_v4(),
+        })
+    }
+}
+
+/// Records the envelope and acks with fixed ids so a probe can assert the stamping.
+struct AckingGlSink(std::sync::Mutex<Option<backbone_gl_posting::AccountingPostEnvelope>>);
+
+#[async_trait::async_trait]
+impl backbone_gl_posting::GlPostSink for AckingGlSink {
+    async fn post(
+        &self,
+        envelope: &backbone_gl_posting::AccountingPostEnvelope,
+    ) -> Result<backbone_gl_posting::GlPostAck, backbone_gl_posting::GlPostRejected> {
+        *self.0.lock().unwrap() = Some(envelope.clone());
+        Ok(backbone_gl_posting::GlPostAck {
+            post_id: Uuid::new_v4(),
+            journal_id: Uuid::new_v4(),
+            idempotent_reuse: false,
+        })
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Probation confirmation (the lifecycle.probation_confirmed producer)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+
+    // In-flight onboarding: confirmation is refused (it runs on a finished journey).
+    let in_flight: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
+           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    // Completed with a FUTURE probation end: refused without force, allowed with it.
+    let future_end = Utc::now().date_naive() + chrono::Duration::days(30);
+    let gated: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status, probation_end_date)
+           VALUES ($1,$2,NOW(),'completed',$3) RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .bind(future_end)
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    // Completed with a PAST probation end: the happy path.
+    let past_end = Utc::now().date_naive() - chrono::Duration::days(1);
+    let ready: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status, probation_end_date)
+           VALUES ($1,$2,NOW(),'completed',$3) RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .bind(past_end)
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    let svc = OnboardingWriteService::new(pool.clone());
+
+    // Gate 1: not completed.
+    let err = svc.confirm(company_id, in_flight, false).await.expect_err("in-flight onboarding cannot confirm");
+    assert!(
+        matches!(err, backbone_lifecycle::application::service::OnboardingCompleteError::NotCompleted { .. }),
+        "in-flight gate is NotCompleted, got {err:?}"
+    );
+
+    // Gate 2: date not reached, no force.
+    let err = svc.confirm(company_id, gated, false).await.expect_err("future probation end refuses without force");
+    assert!(
+        matches!(err, backbone_lifecycle::application::service::OnboardingCompleteError::ProbationNotEnded { .. }),
+        "date gate is ProbationNotEnded, got {err:?}"
+    );
+    assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 0, "no event staged by a refused gate");
+
+    // Force overrides the date gate.
+    let forced = svc.confirm(company_id, gated, true).await?.expect("force confirms past the date gate");
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT event_type FROM lifecycle.outbox_events WHERE id=$1")
+            .bind(forced)
+            .fetch_one(&pool)
+            .await?,
+        "lifecycle.probation_confirmed"
+    );
+
+    // Happy path + producer idempotency.
+    let event_id = svc.confirm(company_id, ready, false).await?.expect("past-end onboarding confirms");
+    let replay = svc.confirm(company_id, ready, false).await?;
+    assert!(replay.is_none(), "re-confirm stages no second event");
+
+    let confirmed_at: Option<DateTime<Utc>> =
+        sqlx::query_scalar("SELECT confirmed_at FROM lifecycle.onboardings WHERE id=$1")
+            .bind(ready)
+            .fetch_one(&pool)
+            .await?;
+    assert!(confirmed_at.is_some(), "confirmed_at stamped exactly once");
+
+    let payload_emp: String =
+        sqlx::query_scalar("SELECT payload->>'employee_id' FROM lifecycle.outbox_events WHERE id=$1")
+            .bind(event_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(payload_emp, employee_id.to_string(), "payload carries the employee id");
+    assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 2, "forced + happy events staged");
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Checkpoint creates (activity seam: fail-closed, silent, then recording)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit() -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::{
+        ClearanceItemWriteService, NewClearanceItem, NewOnboardingTask,
+        OnboardingTaskWriteService, UnwiredActivitySink,
+    };
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+
+    let company_id = Uuid::new_v4();
+    let onboarding_id: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
+           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(Uuid::new_v4())
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+    let offboarding_id: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.offboardings
+               (company_id, employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,$2,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(Uuid::new_v4())
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    // ── Fail-closed: an explicit notify against the unwired seam creates NO row. ──
+    let unwired_tasks = OnboardingTaskWriteService::new(pool.clone(), std::sync::Arc::new(UnwiredActivitySink));
+    let unwired_clearance = ClearanceItemWriteService::new(pool.clone(), std::sync::Arc::new(UnwiredActivitySink));
+
+    let err = unwired_tasks
+        .create_task(
+            company_id,
+            NewOnboardingTask {
+                onboarding_id,
+                title: "collect docs".into(),
+                category: Some("document".into()),
+                owner_employee_id: None,
+                due_date: None,
+                notify_user_id: Some(Uuid::new_v4()),
+            },
+        )
+        .await
+        .expect_err("notify against the unwired seam fails closed");
+    assert!(
+        matches!(err, backbone_lifecycle::application::service::CheckpointError::ActivitySeamUnwired),
+        "unwired notify is ActivitySeamUnwired, got {err:?}"
+    );
+    let task_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM lifecycle.onboarding_tasks WHERE onboarding_id=$1")
+            .bind(onboarding_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(task_count, 0, "fail-closed notify wrote no row");
+
+    let err = unwired_clearance
+        .create_clearance_item(
+            company_id,
+            NewClearanceItem {
+                offboarding_id,
+                title: "return laptop".into(),
+                clearer_employee_id: None,
+                notify_user_id: Some(Uuid::new_v4()),
+            },
+        )
+        .await
+        .expect_err("clearance notify against the unwired seam fails closed");
+    assert!(
+        matches!(err, backbone_lifecycle::application::service::CheckpointError::ActivitySeamUnwired),
+        "unwired clearance notify is ActivitySeamUnwired, got {err:?}"
+    );
+
+    // ── Silent create (no notify): the row records, nothing is scheduled. ──
+    unwired_tasks
+        .create_task(
+            company_id,
+            NewOnboardingTask {
+                onboarding_id,
+                title: "silent task".into(),
+                category: None,
+                owner_employee_id: None,
+                due_date: None,
+                notify_user_id: None,
+            },
+        )
+        .await?;
+    let silent: Option<String> =
+        sqlx::query_scalar("SELECT status::text FROM lifecycle.onboarding_tasks WHERE onboarding_id=$1")
+            .bind(onboarding_id)
+            .fetch_optional(&pool)
+            .await?;
+    assert_eq!(silent.as_deref(), Some("pending"), "silent create recorded the row");
+
+    // ── Wired sink: the create lands AND the notify fires with the checkpoint's own facts. ──
+    let recorder = std::sync::Arc::new(RecordingActivitySink(std::sync::Mutex::new(Vec::new())));
+    let wired_tasks = OnboardingTaskWriteService::new(pool.clone(), recorder.clone());
+    let due = chrono::NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+    let user_id = Uuid::new_v4();
+    wired_tasks
+        .create_task(
+            company_id,
+            NewOnboardingTask {
+                onboarding_id,
+                title: "equipment handout".into(),
+                category: Some("equipment".into()),
+                owner_employee_id: None,
+                due_date: Some(due),
+                notify_user_id: Some(user_id),
+            },
+        )
+        .await?;
+
+    let recorded = recorder.0.lock().unwrap().clone();
+    assert_eq!(recorded.len(), 1, "exactly one activity scheduled");
+    assert_eq!(recorded[0].res_model, "onboarding_task");
+    assert_eq!(recorded[0].user_id, user_id);
+    assert_eq!(recorded[0].deadline, Some(due), "deadline mirrors the task's due date");
+    assert!(recorded[0].summary.contains("equipment handout"));
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Final settlement: draft (idempotent) → confirm (GL seam fail-closed → acking sink → idempotent)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack() -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::{
+        FinalSettlementError, FinalSettlementWriteService, SettlementAccounts,
+    };
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+
+    // Same seeds as the offboarding close flow: 4.000-year tenure, 22M salary, 5 unused days.
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    sqlx::query(
+        r#"INSERT INTO employee.employments (company_id, employee_id, join_date, status)
+           VALUES ($1,$2,'2020-01-01','active')"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO payroll.compensation_changes
+               (company_id, employee_id, change_type, new_amount, effective_date)
+           VALUES ($1,$2,'hire'::compensation_change_type, 22000000, '2020-01-01')"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO timeoff.timeoff_balances
+               (company_id, employee_id, timeoff_type_id, period, allocated, used)
+           VALUES ($1,$2,$3,'2024',10,5)"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await?;
+    let offboarding_id: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.offboardings
+               (company_id, employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,$2,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    // ── DRAFT: assembles from the same inputs the close verb used. ────────────────────────────
+    let svc = FinalSettlementWriteService::with_pool(pool.clone());
+    let settlement_id = svc.draft_from_offboarding(company_id, offboarding_id).await?;
+
+    // base_pay = 22M × 1/31 (2024-01-01, 31-day month) = 709,677.42
+    // pesangon_amount = 88M + 88M + 26.4M = 202,400,000 · leave = 5,000,000
+    // net = 208,109,677.42
+    let row = sqlx::query(
+        r#"SELECT period, base_pay, unused_leave_payout, pesangon_amount, net_payable,
+                  status::text AS status, accounting_post_id
+             FROM lifecycle.final_settlements WHERE id=$1"#,
+    )
+    .bind(settlement_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.get::<String, _>("period"), "2024-01");
+    assert_eq!(row.get::<Decimal, _>("base_pay"), Decimal::from_str_exact("709677.42").unwrap());
+    assert_eq!(row.get::<Decimal, _>("pesangon_amount"), Decimal::new(202_400_000, 0));
+    assert_eq!(row.get::<Decimal, _>("unused_leave_payout"), Decimal::new(5_000_000, 0));
+    assert_eq!(row.get::<Decimal, _>("net_payable"), Decimal::from_str_exact("208109677.42").unwrap());
+    assert_eq!(row.get::<String, _>("status"), "draft");
+    assert!(row.get::<Option<Uuid>, _>("accounting_post_id").is_none());
+
+    // Double draft → the collision surfaces the winner's id.
+    let err = svc
+        .draft_from_offboarding(company_id, offboarding_id)
+        .await
+        .expect_err("second draft for the same offboarding is rejected");
+    match err {
+        FinalSettlementError::AlreadyDrafted { settlement_id: existing, .. } => {
+            assert_eq!(existing, settlement_id, "409 carries the existing settlement id");
+        }
+        other => panic!("expected AlreadyDrafted, got {other:?}"),
+    }
+
+    let accounts = SettlementAccounts {
+        severance_expense_account_id: Uuid::new_v4(),
+        leave_encashment_expense_account_id: Uuid::new_v4(),
+        employee_payable_account_id: Uuid::new_v4(),
+    };
+
+    // ── CONFIRM, unwired: loud 422, row stays draft + unstamped. ──────────────────────────────
+    let err = svc
+        .confirm(company_id, settlement_id, accounts)
+        .await
+        .expect_err("unwired GL seam refuses the confirm");
+    match &err {
+        FinalSettlementError::GlRejected { code, .. } => {
+            assert_eq!(code, "gl_seam_unwired");
+        }
+        other => panic!("expected GlRejected, got {other:?}"),
+    }
+    assert_eq!(err.http_status(), 422);
+    let still: (String, Option<Uuid>) = sqlx::query_as(
+        "SELECT status::text AS status, accounting_post_id FROM lifecycle.final_settlements WHERE id=$1",
+    )
+    .bind(settlement_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(still.0, "draft", "rejected confirm left the row retryable");
+    assert!(still.1.is_none(), "no post id stamped without an ack");
+
+    // ── Tax gate: a drafted deduction refuses until a withholding account joins the seam. ─────
+    sqlx::query("UPDATE lifecycle.final_settlements SET tax_deduction = 1000000 WHERE id=$1")
+        .bind(settlement_id)
+        .execute(&pool)
+        .await?;
+    let sink = std::sync::Arc::new(AckingGlSink(std::sync::Mutex::new(None)));
+    let wired = FinalSettlementWriteService::with_pool(pool.clone()).with_gl_sink(sink.clone());
+    let err = wired
+        .confirm(company_id, settlement_id, accounts)
+        .await
+        .expect_err("a drafted tax deduction refuses the confirm");
+    assert!(
+        matches!(err, FinalSettlementError::TaxRequiresAccount(_, t) if t == Decimal::new(1_000_000, 0)),
+        "tax gate fired, got {err:?}"
+    );
+    sqlx::query("UPDATE lifecycle.final_settlements SET tax_deduction = NULL WHERE id=$1")
+        .bind(settlement_id)
+        .execute(&pool)
+        .await?;
+
+    // ── CONFIRM, wired: ack → stamp; envelope balanced + dedup-stable. ────────────────────────
+    let ack = wired
+        .confirm(company_id, settlement_id, accounts)
+        .await?
+        .expect("wired sink acks the confirm");
+    let stamped: (String, Uuid, Uuid) = sqlx::query_as(
+        "SELECT status::text AS status, accounting_post_id, journal_id FROM lifecycle.final_settlements WHERE id=$1",
+    )
+    .bind(settlement_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stamped.0, "confirmed");
+    assert_eq!(stamped.1, ack.post_id, "post id stamped from the ack");
+    assert_eq!(stamped.2, ack.journal_id, "journal id stamped from the ack");
+
+    let envelope = sink.0.lock().unwrap().clone().expect("the sink saw the envelope");
+    assert_eq!(envelope.idempotency_key, format!("final_settlement:{company_id}:{settlement_id}"));
+    assert_eq!(envelope.source_type, "final_settlement");
+    assert_eq!(envelope.source_id, settlement_id);
+    assert!(envelope.is_balanced(), "debits equal credits");
+    assert_eq!(envelope.lines.len(), 3, "severance + leave debits, one payable credit");
+    let total_debit: Decimal = envelope.lines.iter().map(|l| l.debit).sum();
+    assert_eq!(total_debit, Decimal::new(207_400_000, 0), "severance 202.4M + leave 5M");
+
+    // Producer idempotency: a re-confirm sends no second envelope.
+    let replay = wired.confirm(company_id, settlement_id, accounts).await?;
+    assert!(replay.is_none(), "re-confirm is a no-op");
+    assert!(sink.0.lock().unwrap().is_some(), "sink still holds exactly the first envelope");
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// The clear gate in front of close (clearance-derived)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn offboarding_clear_asserts_the_clearance_derivation() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+
+    let company_id = Uuid::new_v4();
+    let offboarding_id: Uuid = sqlx::query(
+        r#"INSERT INTO lifecycle.offboardings
+               (company_id, employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,$2,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
+    )
+    .bind(company_id)
+    .bind(Uuid::new_v4())
+    .fetch_one(&pool)
+    .await?
+    .get("id");
+
+    // A pending item blocks the clear.
+    sqlx::query(
+        r#"INSERT INTO lifecycle.clearance_items (company_id, offboarding_id, title, status)
+           VALUES ($1,$2,'revoke access','pending')"#,
+    )
+    .bind(company_id)
+    .bind(offboarding_id)
+    .execute(&pool)
+    .await?;
+
+    let svc = OffboardingWriteService::with_pool(pool.clone());
+    let err = svc.clear(company_id, offboarding_id).await.expect_err("open item blocks the clear");
+    assert!(
+        matches!(err, backbone_lifecycle::application::service::OffboardingCloseError::ClearanceOpen { open_count: 1, .. }),
+        "clearance gate fired with the open count, got {err:?}"
+    );
+
+    // Resolve the item → the clear lands; re-clear is a no-op.
+    sqlx::query("UPDATE lifecycle.clearance_items SET status='cleared' WHERE offboarding_id=$1")
+        .bind(offboarding_id)
+        .execute(&pool)
+        .await?;
+    assert!(svc.clear(company_id, offboarding_id).await?, "resolved items let the clear through");
+    assert!(!svc.clear(company_id, offboarding_id).await?, "re-clear is a no-op");
+
+    let status: String =
+        sqlx::query_scalar("SELECT status::text FROM lifecycle.offboardings WHERE id=$1")
+            .bind(offboarding_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(status, "cleared", "clear stamped the derived state");
     Ok(())
 }

@@ -26,6 +26,16 @@ pub mod offboarding_write_service;
 // The cross-module read ports the offboarding producer needs to compute the 🇮🇩 pesangon at close
 // time (join_date / current salary / remaining leave). Trait seam + pool-backed default impl.
 pub mod offboarding_ports;
+// Outbound activity-scheduling port: put a mail activity on a checkpoint owner's plate without a
+// Cargo edge into the mail domain. The host app wires the adapter; the unwired default fails
+// closed on any explicit notify request.
+pub mod activity_port;
+// Checkpoint create verbs (onboarding tasks / clearance items) with the optional notify side
+// effect — fail-closed pre-check, insert, commit, schedule after commit.
+pub mod checkpoint_write_service;
+// Final-settlement draft (idempotent, one per offboarding) + GL confirmation through the shared
+// backbone-gl-posting port (stamp only after accounting acks; unwired default = loud 422).
+pub mod final_settlement_write_service;
 // END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
@@ -40,13 +50,22 @@ pub use pesangon::{
     pesangon, PesangonBreakdown, PesangonConfig, PesangonError, ReasonRule, UpmkScaleStep,
 };
 pub use promotion_write_service::{
-    PromotionEffectError, PromotionWriteService, PROMOTION_EFFECTIVE_EVENT_TYPE,
+    NewPromotion, PromotionEffectError, PromotionWriteService, PROMOTION_EFFECTIVE_EVENT_TYPE,
 };
 pub use onboarding_write_service::{
-    OnboardingCompleteError, OnboardingWriteService, ONBOARDING_COMPLETED_EVENT_TYPE,
+    NewOnboarding, OnboardingCompleteError, OnboardingWriteService, ONBOARDING_COMPLETED_EVENT_TYPE,
+    PROBATION_CONFIRMED_EVENT_TYPE,
 };
 pub use offboarding_write_service::{
-    OffboardingCloseError, OffboardingWriteService, OFFBOARDING_CLOSED_EVENT_TYPE,
+    NewOffboarding, OffboardingCloseError, OffboardingWriteService, OFFBOARDING_CLOSED_EVENT_TYPE,
 };
 pub use offboarding_ports::{OffboardingInputs, PoolOffboardingInputs};
+pub use activity_port::{ActivityAck, ActivityCommand, ActivityRejected, ActivitySink, UnwiredActivitySink};
+pub use checkpoint_write_service::{
+    ClearanceItemWriteService, CheckpointError, NewClearanceItem, NewOnboardingTask,
+    OnboardingTaskWriteService,
+};
+pub use final_settlement_write_service::{
+    FinalSettlementError, FinalSettlementWriteService, SettlementAccounts, UnwiredGlSink,
+};
 // END CUSTOM

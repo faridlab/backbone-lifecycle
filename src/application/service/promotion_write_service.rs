@@ -17,6 +17,7 @@
 //!
 //! This is a user-owned custom file — it is NEVER regenerated, so it is safe to edit freely.
 
+use backbone_orm::company_scope;
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -40,12 +41,58 @@ pub enum PromotionEffectError {
     /// The promotion is approved but its `effective_date` is still in the future.
     #[error("promotion {promotion_id} effective_date {effective_date} has not been reached yet")]
     NotYetEffective { promotion_id: Uuid, effective_date: chrono::NaiveDate },
+    /// The promotion exists but is not `pending` (only a pending promotion may be approved;
+    /// an already-`approved` one is a no-op, anything else is a domain violation).
+    #[error("promotion {promotion_id} is not pending (status: {status})")]
+    NotPending { promotion_id: Uuid, status: String },
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
     /// An outbox staging failure.
     #[error("outbox error: {0}")]
     Outbox(#[from] backbone_outbox::OutboxError),
+}
+
+impl PromotionEffectError {
+    /// Stable machine code for the HTTP surface.
+    pub fn code(&self) -> &'static str {
+        match self {
+            PromotionEffectError::NotFound(_) => "promotion_not_found",
+            PromotionEffectError::NotApproved { .. } => "promotion_not_approved",
+            PromotionEffectError::NotYetEffective { .. } => "promotion_not_yet_effective",
+            PromotionEffectError::NotPending { .. } => "promotion_not_pending",
+            PromotionEffectError::Db(_) | PromotionEffectError::Outbox(_) => "internal_error",
+        }
+    }
+    /// HTTP status for the HTTP surface.
+    pub fn http_status(&self) -> u16 {
+        match self {
+            PromotionEffectError::NotFound(_) => 404,
+            PromotionEffectError::NotApproved { .. }
+            | PromotionEffectError::NotYetEffective { .. }
+            | PromotionEffectError::NotPending { .. } => 422,
+            PromotionEffectError::Db(_) | PromotionEffectError::Outbox(_) => 500,
+        }
+    }
+}
+
+/// Input for [`PromotionWriteService::create`]. Creation IS submission: the row lands
+/// `pending` (awaiting approval) — `draft` stays reserved for imported/pre-created records.
+#[derive(Debug, Clone, Default)]
+pub struct NewPromotion {
+    pub employee_id: Uuid,
+    /// One of the `promotion_type` labels (promotion/transfer/demotion/lateral); empty = default.
+    pub promotion_type: Option<String>,
+    pub position_id_from: Option<Uuid>,
+    pub position_id_to: Option<Uuid>,
+    pub level_id_from: Option<Uuid>,
+    pub level_id_to: Option<Uuid>,
+    pub department_id_from: Option<Uuid>,
+    pub department_id_to: Option<Uuid>,
+    pub proposed_salary: Option<Decimal>,
+    pub effective_date: chrono::NaiveDate,
+    pub requested_by: Option<Uuid>,
+    pub reason: Option<String>,
 }
 
 /// The lifecycle write-service that owns the promotion approved→effective transition + the outbox emit.
@@ -63,6 +110,116 @@ impl PromotionWriteService {
         Self { pool }
     }
 
+    /// Record a promotion request in the `pending` state — creation is submission.
+    ///
+    /// Scoped to the caller's company (the tenant comes from the auth context, never the
+    /// body). Returns the new promotion id. `draft` remains a schema-level state for
+    /// imported records; the guarded surface always enters at `pending`.
+    pub async fn create(
+        &self,
+        company: Uuid,
+        input: NewPromotion,
+    ) -> Result<Uuid, PromotionEffectError> {
+        let mut tx = self.pool.begin().await?;
+        company_scope::bind_company_on(&mut tx, company).await?;
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            r#"INSERT INTO lifecycle.promotions
+                   (id, company_id, employee_id, promotion_type,
+                    position_id_from, position_id_to, level_id_from, level_id_to,
+                    department_id_from, department_id_to, proposed_salary,
+                    effective_date, status, requested_by, reason, metadata)
+               VALUES ($1, $2, $3, NULLIF($4, '')::promotion_type,
+                       $5, $6, $7, $8, $9, $10, $11,
+                       $12, 'pending', $13, $14, $15::jsonb)"#,
+        )
+        .bind(id)
+        .bind(company)
+        .bind(input.employee_id)
+        .bind(input.promotion_type)
+        .bind(input.position_id_from)
+        .bind(input.position_id_to)
+        .bind(input.level_id_from)
+        .bind(input.level_id_to)
+        .bind(input.department_id_from)
+        .bind(input.department_id_to)
+        .bind(input.proposed_salary)
+        .bind(input.effective_date)
+        .bind(input.requested_by)
+        .bind(input.reason)
+        .bind(
+            r#"{"created_at":null,"updated_at":null,"deleted_at":null,
+                "created_by":null,"updated_by":null,"deleted_by":null}"#,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
+    /// Approve a pending promotion — the gate in front of [`Self::effect`].
+    ///
+    /// A plain state change with no cross-module side effect (the handoff event fires at
+    /// `effect`, once, atomically), so it stages no outbox row. `approved_by` stamps who
+    /// approved (the operator's user id from the caller).
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(true)` on a fresh approval.
+    /// - `Ok(false)` if the promotion was already `approved` (idempotent no-op).
+    /// - [`PromotionEffectError::NotPending`] for any other status (a `draft` must be
+    ///   submitted, an `effective`/`rejected`/`cancelled` one cannot move this way).
+    pub async fn approve(
+        &self,
+        company: Uuid,
+        promotion_id: Uuid,
+        approved_by: Option<Uuid>,
+    ) -> Result<bool, PromotionEffectError> {
+        let mut tx = self.pool.begin().await?;
+        company_scope::bind_company_on(&mut tx, company).await?;
+
+        let row = sqlx::query(
+            r#"SELECT status::text AS status
+                 FROM lifecycle.promotions
+                WHERE id = $1 AND company_id = $2
+                FOR UPDATE"#,
+        )
+        .bind(promotion_id)
+        .bind(company)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let row = match row {
+            Some(r) => r,
+            None => {
+                tx.rollback().await?;
+                return Err(PromotionEffectError::NotFound(promotion_id));
+            }
+        };
+        let status: String = row.try_get("status")?;
+
+        if status == "approved" {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        if status != "pending" {
+            tx.rollback().await?;
+            return Err(PromotionEffectError::NotPending { promotion_id, status });
+        }
+
+        sqlx::query(
+            r#"UPDATE lifecycle.promotions
+                  SET status = 'approved', approved_by = $2
+                WHERE id = $1"#,
+        )
+        .bind(promotion_id)
+        .bind(approved_by)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     /// Mark the promotion effective and stage a `promotion.effective` outbox event — atomically.
     ///
     /// # Returns
@@ -76,9 +233,18 @@ impl PromotionWriteService {
     ///
     /// Only an `approved` promotion whose `effective_date` has been reached may be effected; any other
     /// non-effective status is a [`PromotionEffectError::NotApproved`], and a future `effective_date`
-    /// is a [`PromotionEffectError::NotYetEffective`].
-    pub async fn effect(&self, promotion_id: Uuid) -> Result<Option<Uuid>, PromotionEffectError> {
+    /// is a [`PromotionEffectError::NotYetEffective`]. The caller's `company` scopes the whole path —
+    /// a promotion id from another tenant reads as [`PromotionEffectError::NotFound`].
+    pub async fn effect(
+        &self,
+        company: Uuid,
+        promotion_id: Uuid,
+    ) -> Result<Option<Uuid>, PromotionEffectError> {
         let mut tx = self.pool.begin().await?;
+        // Bind the caller's company before any statement: the whole path runs
+        // under the row-level fence, so a row from another tenant is invisible
+        // (a cross-tenant id reads as NotFound, never as a mutable target).
+        company_scope::bind_company_on(&mut tx, company).await?;
 
         // Lock the promotion row for the duration of the state change + the outbox stage, so a
         // concurrent effect cannot race a second transition. `status::text` — the column is a Postgres
@@ -90,10 +256,11 @@ impl PromotionWriteService {
                       department_id_from, department_id_to, proposed_salary,
                       effective_date, status::text AS status
                  FROM lifecycle.promotions
-                WHERE id = $1
+                WHERE id = $1 AND company_id = $2
                 FOR UPDATE"#,
         )
         .bind(promotion_id)
+        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 

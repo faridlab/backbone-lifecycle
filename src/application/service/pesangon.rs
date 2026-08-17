@@ -38,8 +38,9 @@ use std::path::Path;
 
 /// Two-decimal rounding used for every pesangon money output.
 const MONEY_DP: u32 = 2;
-/// Round a Decimal to ledger precision (2 dp, half-up).
-fn money(d: Decimal) -> Decimal {
+/// Round a Decimal to ledger precision (2 dp, half-up). Shared with the final-settlement
+/// draft verb, which prorates base pay with the same convention.
+pub(crate) fn money(d: Decimal) -> Decimal {
     d.round_dp_with_strategy(MONEY_DP, RoundingStrategy::MidpointAwayFromZero)
 }
 

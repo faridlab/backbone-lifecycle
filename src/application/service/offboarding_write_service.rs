@@ -29,6 +29,7 @@
 use crate::application::service::offboarding_ports::OffboardingInputs;
 use crate::application::service::pesangon::{pesangon, PesangonConfig};
 use crate::domain::entity::OffboardingReason;
+use backbone_orm::company_scope;
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -56,6 +57,14 @@ pub enum OffboardingCloseError {
     /// `closed` one is a no-op, anything else is a domain violation).
     #[error("offboarding {offboarding_id} is not cleared (status: {status})")]
     NotCleared { offboarding_id: Uuid, status: String },
+    /// The offboarding exists but is not `in_progress` (only an in-flight offboarding may be
+    /// marked cleared; an already-`cleared`/`closed` one is a no-op).
+    #[error("offboarding {offboarding_id} is not in_progress (status: {status})")]
+    NotInProgress { offboarding_id: Uuid, status: String },
+    /// One or more clearance items are still open (`pending` or `blocked`) — the offboarding
+    /// cannot be marked cleared while a checkpoint remains unresolved.
+    #[error("offboarding {offboarding_id} has {open_count} open clearance item(s) (pending/blocked); resolve before clearing")]
+    ClearanceOpen { offboarding_id: Uuid, open_count: i64 },
     /// The employee has no `join_date` — tenure cannot be computed, so the pesangon cannot be
     /// computed. Fail closed: the offboarding is NOT closed.
     #[error("cannot compute pesangon: employee {employee_id} has no employment join_date")]
@@ -76,6 +85,49 @@ pub enum OffboardingCloseError {
     /// An outbox staging failure.
     #[error("outbox error: {0}")]
     Outbox(#[from] backbone_outbox::OutboxError),
+}
+
+impl OffboardingCloseError {
+    /// Stable machine code for the HTTP surface.
+    pub fn code(&self) -> &'static str {
+        match self {
+            OffboardingCloseError::NotFound(_) => "offboarding_not_found",
+            OffboardingCloseError::NotCleared { .. } => "offboarding_not_cleared",
+            OffboardingCloseError::NotInProgress { .. } => "offboarding_not_in_progress",
+            OffboardingCloseError::ClearanceOpen { .. } => "clearance_items_open",
+            OffboardingCloseError::MissingJoinDate { .. } => "missing_join_date",
+            OffboardingCloseError::MissingSalary { .. } => "missing_salary",
+            OffboardingCloseError::BadReason(_) => "invalid_offboarding_reason",
+            OffboardingCloseError::Pesangon(_) => "pesangon_calc_error",
+            OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => "internal_error",
+        }
+    }
+    /// HTTP status for the HTTP surface.
+    pub fn http_status(&self) -> u16 {
+        match self {
+            OffboardingCloseError::NotFound(_) => 404,
+            OffboardingCloseError::NotCleared { .. }
+            | OffboardingCloseError::NotInProgress { .. }
+            | OffboardingCloseError::ClearanceOpen { .. }
+            | OffboardingCloseError::MissingJoinDate { .. }
+            | OffboardingCloseError::MissingSalary { .. }
+            | OffboardingCloseError::BadReason(_)
+            | OffboardingCloseError::Pesangon(_) => 422,
+            OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => 500,
+        }
+    }
+}
+
+/// Input for [`OffboardingWriteService::create`]. Recording the notice starts the exit
+/// workflow: the row lands `in_progress` (the schema's `initiated` stays reserved for
+/// imported records — the guarded surface has no separate initiate verb).
+#[derive(Debug, Clone)]
+pub struct NewOffboarding {
+    pub employee_id: Uuid,
+    /// One of the `offboarding_reason` labels; empty = the schema default.
+    pub reason: Option<String>,
+    pub notice_date: chrono::NaiveDate,
+    pub last_working_day: chrono::NaiveDate,
 }
 
 /// The lifecycle write-service that owns the offboarding cleared→closed transition + the outbox emit.
@@ -107,6 +159,121 @@ impl OffboardingWriteService {
         Self::new(pool, inputs, PesangonConfig::default())
     }
 
+    /// Record an offboarding in the `in_progress` state — recording the notice starts the
+    /// exit workflow.
+    ///
+    /// Scoped to the caller's company (the tenant comes from the auth context, never the
+    /// body). Returns the new offboarding id. The `clear` verb gates the move to `cleared`;
+    /// `close` (the compound-event producer) only runs on a cleared row.
+    pub async fn create(
+        &self,
+        company: Uuid,
+        input: NewOffboarding,
+    ) -> Result<Uuid, OffboardingCloseError> {
+        let mut tx = self.pool.begin().await?;
+        company_scope::bind_company_on(&mut tx, company).await?;
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            r#"INSERT INTO lifecycle.offboardings
+                   (id, company_id, employee_id, reason, notice_date, last_working_day,
+                    status, metadata)
+               VALUES ($1, $2, $3, NULLIF($4, '')::offboarding_reason, $5, $6,
+                       'in_progress', $7::jsonb)"#,
+        )
+        .bind(id)
+        .bind(company)
+        .bind(input.employee_id)
+        .bind(input.reason)
+        .bind(input.notice_date)
+        .bind(input.last_working_day)
+        .bind(
+            r#"{"created_at":null,"updated_at":null,"deleted_at":null,
+                "created_by":null,"updated_by":null,"deleted_by":null}"#,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
+    /// Mark the offboarding cleared — the gate in front of [`Self::close`].
+    ///
+    /// `cleared` is derived from the clearance items (an offboarding is cleared once all
+    /// its items are), so the verb ASSERTS that derivation instead of trusting the caller:
+    /// any item still `pending`/`blocked` is an [`OffboardingCloseError::ClearanceOpen`].
+    /// A plain state change with no cross-module side effect (the compound event fires at
+    /// `close`), so it stages no outbox row.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(true)` on a fresh clear.
+    /// - `Ok(false)` if the offboarding was already `cleared` or `closed` (idempotent no-op).
+    /// - [`OffboardingCloseError::NotInProgress`] for any other status.
+    pub async fn clear(
+        &self,
+        company: Uuid,
+        offboarding_id: Uuid,
+    ) -> Result<bool, OffboardingCloseError> {
+        let mut tx = self.pool.begin().await?;
+        company_scope::bind_company_on(&mut tx, company).await?;
+
+        let row = sqlx::query(
+            r#"SELECT status::text AS status
+                 FROM lifecycle.offboardings
+                WHERE id = $1 AND company_id = $2
+                FOR UPDATE"#,
+        )
+        .bind(offboarding_id)
+        .bind(company)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let row = match row {
+            Some(r) => r,
+            None => {
+                tx.rollback().await?;
+                return Err(OffboardingCloseError::NotFound(offboarding_id));
+            }
+        };
+        let status: String = row.try_get("status")?;
+
+        if status == "cleared" || status == "closed" {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        if status != "in_progress" {
+            tx.rollback().await?;
+            return Err(OffboardingCloseError::NotInProgress { offboarding_id, status });
+        }
+
+        // The derivation this verb stamps: zero open items. status::text — Postgres enum.
+        let open_count: i64 = sqlx::query_scalar(
+            r#"SELECT count(*) FROM lifecycle.clearance_items
+                WHERE offboarding_id = $1
+                  AND company_id = $2
+                  AND status::text IN ('pending', 'blocked')"#,
+        )
+        .bind(offboarding_id)
+        .bind(company)
+        .fetch_one(&mut *tx)
+        .await?;
+        if open_count > 0 {
+            tx.rollback().await?;
+            return Err(OffboardingCloseError::ClearanceOpen { offboarding_id, open_count });
+        }
+
+        sqlx::query(
+            r#"UPDATE lifecycle.offboardings
+                  SET status = 'cleared'
+                WHERE id = $1"#,
+        )
+        .bind(offboarding_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     /// Mark the offboarding closed, compute the 🇮🇩 pesangon, and stage an `offboarding.closed`
     /// outbox event carrying the breakdown — all atomically.
     ///
@@ -121,17 +288,26 @@ impl OffboardingWriteService {
     /// Only a `cleared` offboarding may be closed; any other non-closed status is an
     /// [`OffboardingCloseError::NotCleared`]. Missing cross-module inputs (`join_date` / salary) fail
     /// closed — the offboarding is NOT closed and NO event is staged.
-    pub async fn close(&self, offboarding_id: Uuid) -> Result<Option<Uuid>, OffboardingCloseError> {
+    pub async fn close(
+        &self,
+        company: Uuid,
+        offboarding_id: Uuid,
+    ) -> Result<Option<Uuid>, OffboardingCloseError> {
         let mut tx = self.pool.begin().await?;
+        // Bind the caller's company before any statement: the whole path runs
+        // under the row-level fence, so a row from another tenant is invisible
+        // (a cross-tenant id reads as NotFound, never as a mutable target).
+        company_scope::bind_company_on(&mut tx, company).await?;
 
         // Lock the offboarding row for the duration of the state change + the outbox stage.
         let row = sqlx::query(
             r#"SELECT company_id, employee_id, reason::text AS reason, last_working_day, status::text AS status
                  FROM lifecycle.offboardings
-                WHERE id = $1
+                WHERE id = $1 AND company_id = $2
                 FOR UPDATE"#,
         )
         .bind(offboarding_id)
+        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -161,18 +337,19 @@ impl OffboardingWriteService {
 
         // ── Gather the three cross-module pesangon inputs. These are read-only cross-schema
         //    lookups, run before the state change so a missing prerequisite fails closed (the
-        //    offboarding is NOT closed and NO event is staged). ──────────────────────────────
+        //    offboarding is NOT closed and NO event is staged). Each read runs inside the
+        //    company scope too — the input tables carry their own fences. ────────────────────
         let join_date = self
             .inputs
-            .join_date(employee_id)
+            .join_date(company, employee_id)
             .await?
             .ok_or(OffboardingCloseError::MissingJoinDate { employee_id })?;
         let monthly_salary = self
             .inputs
-            .current_monthly_salary(employee_id)
+            .current_monthly_salary(company, employee_id)
             .await?
             .ok_or(OffboardingCloseError::MissingSalary { employee_id })?;
-        let unused_leave_days = self.inputs.remaining_leave_days(employee_id).await?;
+        let unused_leave_days = self.inputs.remaining_leave_days(company, employee_id).await?;
 
         // Tenure in years (Decimal) from day-level math: days_between / 365.25.
         let tenure_years = tenure_years(join_date, last_working_day);
@@ -231,7 +408,8 @@ impl OffboardingWriteService {
 /// Tenure in fractional years between `join_date` and `as_of` (the offboarding's
 /// `last_working_day`), using a 365.25-day year. Clamped to `>= 0` (a future-dated join_date
 /// yields 0, not a negative tenure). Pure + total — mirrors the calc's own clamping convention.
-fn tenure_years(join_date: chrono::NaiveDate, as_of: chrono::NaiveDate) -> Decimal {
+/// Shared with the final-settlement draft verb, which assembles from the same inputs.
+pub(crate) fn tenure_years(join_date: chrono::NaiveDate, as_of: chrono::NaiveDate) -> Decimal {
     let days = (as_of - join_date).num_days();
     if days <= 0 {
         return Decimal::ZERO;

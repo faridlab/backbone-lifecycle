@@ -20,6 +20,13 @@ user_owned:
   - "src/application/service/onboarding_write_service.rs"
   - "src/application/service/offboarding_write_service.rs"
   - "src/application/service/offboarding_ports.rs"
+  # Checkpoint create verbs + the mail-activity seam they notify through (fail-closed when unwired).
+  - "src/application/service/activity_port.rs"
+  - "src/application/service/checkpoint_write_service.rs"
+  # Settlement drafting/confirmation + the GL-posting seam (post-before-stamp, idempotent per offboarding).
+  - "src/application/service/final_settlement_write_service.rs"
+  # The guarded HTTP composition (read-only CRUD + validated verbs) — the recommended mount.
+  - "src/presentation/http/guarded_routes.rs"
 
   # Behavior tests (the golden cases / oracle) + BDD features.
   - "tests/features/**"

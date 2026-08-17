@@ -74,6 +74,14 @@ pub struct LifecycleModule {
     pub promotion_write_service: Arc<application::service::PromotionWriteService>,
     pub onboarding_write_service: Arc<application::service::OnboardingWriteService>,
     pub offboarding_write_service: Arc<application::service::OffboardingWriteService>,
+    /// Checkpoint create verbs (onboarding tasks / clearance items) with the optional
+    /// notify side effect through the activity port. Public so the composer / tests can
+    /// drive them directly.
+    pub onboarding_task_write_service: Arc<application::service::OnboardingTaskWriteService>,
+    pub clearance_item_write_service: Arc<application::service::ClearanceItemWriteService>,
+    /// Final-settlement draft + GL confirmation. Drafts from the same pesangon inputs as
+    /// the close verb; confirm posts through the GL port and stamps only after the ack.
+    pub final_settlement_write_service: Arc<application::service::FinalSettlementWriteService>,
     // END CUSTOM
 }
 
@@ -114,10 +122,46 @@ impl LifecycleModule {
     /// mount exposes unguarded writes. Compose a guarded router (read + validated
     /// writes) for production, or call `all_crud_routes()` to opt into the full
     /// unguarded surface explicitly.
-    #[deprecated(note = "mounts unvalidated generic CRUD on every entity; compose a guarded router for production, or call all_crud_routes() for the intentional full/unguarded surface")]
+    #[deprecated(note = "mounts unvalidated generic CRUD; prefer readonly_routes() + validated writes, or all_crud_routes() for the full/unguarded surface")]
     pub fn routes(&self) -> Router {
         self.all_crud_routes()
     }
+
+    /// Read-only routes for every entity (GET endpoints only) — the safe base.
+    ///
+    /// Generic mutation can't reach here, so this surface cannot bypass a
+    /// validated write service's invariants. Use this as the production base and
+    /// merge validated write routes (or a write service's HTTP layer) onto it.
+    pub fn readonly_routes(&self) -> Router {
+        use presentation::http::{
+            create_clearance_item_read_routes,
+            create_exit_interview_read_routes,
+            create_final_settlement_read_routes,
+            create_offboarding_read_routes,
+            create_onboarding_read_routes,
+            create_onboarding_task_read_routes,
+            create_promotion_read_routes,
+        };
+
+        Router::new()
+            .merge(create_clearance_item_read_routes(self.clearance_item_service.clone()))
+            .merge(create_exit_interview_read_routes(self.exit_interview_service.clone()))
+            .merge(create_final_settlement_read_routes(self.final_settlement_service.clone()))
+            .merge(create_offboarding_read_routes(self.offboarding_service.clone()))
+            .merge(create_onboarding_read_routes(self.onboarding_service.clone()))
+            .merge(create_onboarding_task_read_routes(self.onboarding_task_service.clone()))
+            .merge(create_promotion_read_routes(self.promotion_service.clone()))
+    }
+
+    // <<< CUSTOM METHODS
+    /// The guarded surface: read-only CRUD for every entity + the validated write verbs
+    /// (workflow transitions, checkpoint creates, settlement draft/confirm), each taking the
+    /// caller's company off the auth context and passing it down. This is the production
+    /// mount — generic mutation never reaches it.
+    pub fn guarded_routes(&self) -> Router {
+        presentation::http::create_guarded_lifecycle_routes(self)
+    }
+    // END CUSTOM
 }
 
 /// Builder for LifecycleModule
@@ -131,6 +175,12 @@ pub struct LifecycleModuleBuilder {
     // module-backed inputs impl can do so explicitly.
     offboarding_inputs: Option<Arc<dyn application::service::OffboardingInputs>>,
     pesangon_config: Option<application::service::PesangonConfig>,
+    // Outbound seams, unwired by default: the activity port (checkpoint notifies) and the GL
+    // posting port (settlement confirmation). The host app supplies the real adapters at
+    // composition time; the unwired defaults fail loudly (422) on any explicit side-effect
+    // request rather than silently skipping it.
+    activity_sink: Option<Arc<dyn application::service::ActivitySink>>,
+    gl_sink: Option<Arc<dyn backbone_gl_posting::GlPostSink>>,
     // END CUSTOM
 }
 
@@ -142,6 +192,8 @@ impl LifecycleModuleBuilder {
             // <<< CUSTOM
             offboarding_inputs: None,
             pesangon_config: None,
+            activity_sink: None,
+            gl_sink: None,
             // END CUSTOM
         }
     }
@@ -166,6 +218,21 @@ impl LifecycleModuleBuilder {
     /// (current-law 🇮🇩 values); pass a YAML-loaded config to honor `config/application.yml`.
     pub fn with_pesangon_config(mut self, cfg: application::service::PesangonConfig) -> Self {
         self.pesangon_config = Some(cfg);
+        self
+    }
+
+    /// Wire the activity port (checkpoint notifies). Unwired by default: a create that
+    /// explicitly asks to notify fails closed with 422 `activity_seam_unwired` instead of
+    /// silently skipping the notification.
+    pub fn with_activity_sink(mut self, sink: Arc<dyn application::service::ActivitySink>) -> Self {
+        self.activity_sink = Some(sink);
+        self
+    }
+
+    /// Wire the GL posting port (settlement confirmation). Unwired by default: confirm fails
+    /// loudly with 422 `gl_seam_unwired` and the settlement stays draft and retryable.
+    pub fn with_gl_sink(mut self, sink: Arc<dyn backbone_gl_posting::GlPostSink>) -> Self {
+        self.gl_sink = Some(sink);
         self
     }
     // END CUSTOM
@@ -217,9 +284,36 @@ impl LifecycleModuleBuilder {
         let pesangon_config = self.pesangon_config.unwrap_or_default();
         let offboarding_write_service = Arc::new(application::service::OffboardingWriteService::new(
             db_pool.clone(),
-            offboarding_inputs,
-            pesangon_config,
+            offboarding_inputs.clone(),
+            pesangon_config.clone(),
         ));
+        // The settlement drafts from the SAME inputs + config the close verb used, so the row
+        // can never disagree with the offboarding.closed event payload. Seams default to the
+        // unwired sinks (loud 422 on explicit side-effect requests) until the host wires them.
+        let gl_sink = self.gl_sink.unwrap_or_else(|| {
+            Arc::new(application::service::UnwiredGlSink)
+        });
+        let final_settlement_write_service =
+            Arc::new(application::service::FinalSettlementWriteService::new(
+                db_pool.clone(),
+                offboarding_inputs,
+                pesangon_config,
+                gl_sink,
+            ));
+        // Checkpoint create verbs share the activity port (unwired by default).
+        let activity_sink = self.activity_sink.unwrap_or_else(|| {
+            Arc::new(application::service::UnwiredActivitySink)
+        });
+        let onboarding_task_write_service =
+            Arc::new(application::service::OnboardingTaskWriteService::new(
+                db_pool.clone(),
+                activity_sink.clone(),
+            ));
+        let clearance_item_write_service =
+            Arc::new(application::service::ClearanceItemWriteService::new(
+                db_pool.clone(),
+                activity_sink,
+            ));
         // END CUSTOM
 
         Ok(LifecycleModule {
@@ -234,6 +328,9 @@ impl LifecycleModuleBuilder {
             promotion_write_service,
             onboarding_write_service,
             offboarding_write_service,
+            onboarding_task_write_service,
+            clearance_item_write_service,
+            final_settlement_write_service,
             // END CUSTOM
         })
     }

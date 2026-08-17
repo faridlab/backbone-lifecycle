@@ -8,7 +8,10 @@
 //!
 //! - every entity stays READABLE through the generated GET endpoints;
 //! - side-effect-free checkpoint data (onboarding tasks, clearance items,
-//!   exit interviews) also keeps the generic write endpoints;
+//!   exit interviews) also keeps the generic write endpoints; the two custom
+//!   creates that fire the activity seam are nested under their parent
+//!   (`/onboardings/{id}/tasks`, `/offboardings/{id}/clearance_items`) so
+//!   they never collide with the flat generic collection POSTs;
 //! - every workflow carrier (onboarding, promotion, offboarding, final
 //!   settlement) has NO generic write surface at all — creation and every
 //!   transition go through write-service verbs, so no path can set a
@@ -337,8 +340,6 @@ async fn close_offboarding(
 #[derive(Debug, Default, Deserialize)]
 struct CreateTaskBody {
     #[serde(default)]
-    onboarding_id: Option<Uuid>,
-    #[serde(default)]
     title: Option<String>,
     #[serde(default)]
     category: Option<String>,
@@ -352,19 +353,24 @@ struct CreateTaskBody {
     notify_user_id: Option<Uuid>,
 }
 
+/// `POST /onboardings/{id}/tasks` — nested under the parent so it never
+/// collides with the generic `POST /onboarding_tasks` the checkpoint write
+/// surface also mounts (axum panics on overlapping method routes at router
+/// build time, which only surfaces when a host actually composes both).
 async fn create_onboarding_task(
     State(svc): State<Arc<OnboardingTaskWriteService>>,
     tenant: CompanyContext,
+    Path(onboarding_id): Path<Uuid>,
     b: Option<Json<CreateTaskBody>>,
 ) -> axum::response::Response {
     let b = b.map(|Json(b)| b).unwrap_or_default();
-    let (onboarding_id, title) = match (b.onboarding_id, b.title) {
-        (Some(o), Some(t)) if !t.trim().is_empty() => (o, t),
+    let title = match b.title {
+        Some(t) if !t.trim().is_empty() => t,
         _ => {
             return err_response(
                 "bad_request",
                 400,
-                "onboardingId and title are required".to_string(),
+                "title is required".to_string(),
             )
         }
     };
@@ -390,8 +396,6 @@ async fn create_onboarding_task(
 #[derive(Debug, Default, Deserialize)]
 struct CreateClearanceItemBody {
     #[serde(default)]
-    offboarding_id: Option<Uuid>,
-    #[serde(default)]
     title: Option<String>,
     #[serde(default)]
     clearer_employee_id: Option<Uuid>,
@@ -401,19 +405,22 @@ struct CreateClearanceItemBody {
     notify_user_id: Option<Uuid>,
 }
 
+/// `POST /offboardings/{id}/clearance_items` — nested under the parent for the
+/// same reason as the onboarding-task create above.
 async fn create_clearance_item(
     State(svc): State<Arc<ClearanceItemWriteService>>,
     tenant: CompanyContext,
+    Path(offboarding_id): Path<Uuid>,
     b: Option<Json<CreateClearanceItemBody>>,
 ) -> axum::response::Response {
     let b = b.map(|Json(b)| b).unwrap_or_default();
-    let (offboarding_id, title) = match (b.offboarding_id, b.title) {
-        (Some(o), Some(t)) if !t.trim().is_empty() => (o, t),
+    let title = match b.title {
+        Some(t) if !t.trim().is_empty() => t,
         _ => {
             return err_response(
                 "bad_request",
                 400,
-                "offboardingId and title are required".to_string(),
+                "title is required".to_string(),
             )
         }
     };
@@ -501,11 +508,13 @@ fn create_lifecycle_verb_routes(
         .with_state(offboardings);
 
     let checkpoints = Router::new()
-        .route("/onboarding_tasks", post(create_onboarding_task))
+        // Nested under the parent workflow: the flat collection POSTs belong to
+        // the generic checkpoint write surface merged alongside this router.
+        .route("/onboardings/:id/tasks", post(create_onboarding_task))
         .with_state(tasks)
         .merge(
             Router::new()
-                .route("/clearance_items", post(create_clearance_item))
+                .route("/offboardings/:id/clearance_items", post(create_clearance_item))
                 .with_state(clearance),
         );
 
@@ -574,3 +583,70 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
 // Keep the error type referenced even if a handler path is compiled out.
 #[allow(dead_code)]
 fn _error_types_referenced(_: FinalSettlementError) {}
+
+#[cfg(test)]
+mod overlap_tests {
+    //! Axum panics at router-build time when two merged routers register the
+    //! same method+path — but only when someone actually composes them. The
+    //! service-level suites never build the guarded router, so a custom verb
+    //! colliding with a generic collection route ships silently and takes the
+    //! host down at boot. This test composes the exact merge the guarded
+    //! surface performs, over lazy pools that never dial a database.
+
+    use super::*;
+    use crate::application::service::{
+        ClearanceItemService, ClearanceItemWriteService, ExitInterviewService,
+        FinalSettlementWriteService, OffboardingWriteService, OnboardingTaskService,
+        OnboardingTaskWriteService, OnboardingWriteService, PromotionWriteService,
+        UnwiredActivitySink,
+    };
+    use crate::infrastructure::persistence::{
+        ClearanceItemRepository, ExitInterviewRepository, OnboardingTaskRepository,
+    };
+
+    #[test]
+    fn verb_routes_do_not_overlap_generic_write_surface() {
+        // sqlx pool creation needs a Tokio context even when lazy (it spawns
+        // the reaper task); give it a throwaway runtime, never a connection.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        let pool = rt.block_on(async {
+            sqlx::postgres::PgPoolOptions::new()
+                .max_connections(1)
+                .connect_lazy("postgresql://127.0.0.1:1/guarded_router_overlap_probe")
+                .expect("lazy pool does not dial")
+        });
+
+        let unwired = Arc::new(UnwiredActivitySink);
+        let verbs = create_lifecycle_verb_routes(
+            Arc::new(OnboardingWriteService::new(pool.clone())),
+            Arc::new(PromotionWriteService::new(pool.clone())),
+            Arc::new(OffboardingWriteService::with_pool(pool.clone())),
+            Arc::new(OnboardingTaskWriteService::new(pool.clone(), unwired.clone())),
+            Arc::new(ClearanceItemWriteService::new(pool.clone(), unwired.clone())),
+            Arc::new(FinalSettlementWriteService::with_pool(pool.clone())),
+        );
+
+        // The generic checkpoint write trio create_guarded_lifecycle_routes
+        // mounts alongside the verbs.
+        let generic = Router::new()
+            .merge(crate::presentation::http::create_onboarding_task_write_routes(Arc::new(
+                OnboardingTaskService::with_repository(OnboardingTaskRepository::new(
+                    pool.clone(),
+                ).into()),
+            )))
+            .merge(crate::presentation::http::create_clearance_item_write_routes(Arc::new(
+                ClearanceItemService::with_repository(ClearanceItemRepository::new(
+                    pool.clone(),
+                ).into()),
+            )))
+            .merge(crate::presentation::http::create_exit_interview_write_routes(Arc::new(
+                ExitInterviewService::with_repository(ExitInterviewRepository::new(pool).into()),
+            )));
+
+        // Panics here = a verb path collides with a generic collection route.
+        let _composed = Router::new().merge(verbs).merge(generic);
+    }
+}

@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -19,7 +19,10 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0", features = ["postgres"] }
 backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
+# v2.7.1 + the axum feature: guarded-route handlers extract `CompanyContext` (the tenant off
+# the signed token) as an axum extractor — the same guarded-surface pattern the recruitment
+# module composes with.
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.1", features = ["axum"] }
 backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
 # Transactional-outbox producer (ADR-005): stages `promotion.effective` / `onboarding.completed` /
 # `offboarding.closed` in the same tx as the lifecycle state change. v2.7.4 is where backbone-outbox
@@ -27,6 +30,12 @@ backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", t
 # HEAD for dev. No features needed on the producer side — `runner`/`multi_tenant` are the relay's
 # concern (backbone-hr-app).
 backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.4" }
+# GL-posting port (the single seam producers reach accounting through): the final-settlement
+# confirm verb builds its balanced envelope with these types and pushes it through a
+# `GlPostSink` the host app wires at composition time. v2.7.7 is where the envelope carried
+# the party-tagged lines the settlement needs. Lifecycle never depends on backbone-accounting
+# itself — the port crate is the whole contract.
+backbone-gl-posting = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.7" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }

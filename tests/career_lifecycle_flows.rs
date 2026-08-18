@@ -33,14 +33,30 @@ use uuid::Uuid;
 /// best-effort shapes here, and the two disagree (a migrated `promotions.title`-style
 /// NOT NULL, for instance, breaks the hermetic seeds). So the suite provisions a
 /// dedicated database it drops and recreates on every run — hermetic by construction.
+///
+/// Set `LIFECYCLE_REQUIRE_DB=1` (CI does) to turn any skip into a hard failure —
+/// a silently-skipped suite must never read as "tests green" on a machine that
+/// simply lost its database.
 async fn connect() -> Option<PgPool> {
+    fn db_required() -> bool {
+        std::env::var("LIFECYCLE_REQUIRE_DB").map(|v| v != "0").unwrap_or(false)
+    }
     let url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/backbone_hr".into());
-    let (prefix, _) = url.trim_end_matches('/').rsplit_once('/')?;
+    let Some((prefix, _)) = url.trim_end_matches('/').rsplit_once('/') else {
+        eprintln!("skip career_lifecycle_flows: DATABASE_URL has no database segment");
+        if db_required() {
+            panic!("career_lifecycle_flows would skip but LIFECYCLE_REQUIRE_DB is set");
+        }
+        return None;
+    };
     let admin = match PgPool::connect(&format!("{prefix}/postgres")).await {
         Ok(p) => p,
         Err(e) => {
             eprintln!("skip career_lifecycle_flows: no admin connection from `{prefix}` ({e})");
+            if db_required() {
+                panic!("career_lifecycle_flows would skip but LIFECYCLE_REQUIRE_DB is set");
+            }
             return None;
         }
     };
@@ -55,6 +71,9 @@ async fn connect() -> Option<PgPool> {
         .await
     {
         eprintln!("skip career_lifecycle_flows: could not create `{scratch}` ({e})");
+        if db_required() {
+            panic!("career_lifecycle_flows would skip but LIFECYCLE_REQUIRE_DB is set");
+        }
         return None;
     }
     admin.close().await;
@@ -62,6 +81,9 @@ async fn connect() -> Option<PgPool> {
         Ok(p) => Some(p),
         Err(e) => {
             eprintln!("skip career_lifecycle_flows: could not connect to `{scratch}` ({e})");
+            if db_required() {
+                panic!("career_lifecycle_flows would skip but LIFECYCLE_REQUIRE_DB is set");
+            }
             None
         }
     }

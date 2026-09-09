@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.2.7"
+version = "0.3.0"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -19,9 +19,8 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["postgres"] }
 backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
-# v2.7.1 + the axum feature: guarded-route handlers extract `CompanyContext` (the tenant off
-# the signed token) as an axum extractor — the same guarded-surface pattern the recruitment
-# module composes with.
+# The axum feature: guarded-route handlers extract `OrgContext` (the acting org node off the
+# signed token) as an axum extractor — the org_auth surface the composing service mounts.
 backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["axum"] }
 backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
 # Transactional-outbox producer (ADR-005): stages `promotion.effective` / `onboarding.completed` /
@@ -75,6 +74,11 @@ serde_yaml = "0.9"
 tonic = "0.12"
 prost = "0.13"
 prost-types = "0.13"
+
+# OpenAPI schema derive. The schema generator emits `use utoipa::ToSchema;`
+# behind the `openapi` feature in entity and DTO files, so the crate must be
+# able to resolve it whenever that feature is turned on.
+utoipa = { version = "5", features = ["chrono", "uuid", "decimal"] }
 
 [features]
 default = []

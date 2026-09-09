@@ -185,4 +185,3 @@ pub fn create_protected_exit_interview_routes<A: AuthMiddleware + Send + Sync + 
             }
         }))
 }
-

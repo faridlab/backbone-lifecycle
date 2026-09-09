@@ -187,4 +187,3 @@ pub fn create_protected_promotion_routes<A: AuthMiddleware + Send + Sync + 'stat
             }
         }))
 }
-

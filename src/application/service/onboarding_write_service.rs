@@ -8,7 +8,7 @@
 //! `lifecycle.outbox_events` via the framework's [`backbone_outbox::outbox::stage`].
 //!
 //! That in-tx write is the load-bearing invariant: the completion transition and the event-emit
-//! commit atomically. The relay (in backbone-hr-app) drains the row onto the integration bus; the
+//! commit atomically. The relay (in the composing service) drains the row onto the integration bus; the
 //! consumer applies it idempotently (inbox dedup on the event id):
 //! - `employee.OnboardingCompletedHandler` — flips `employments.status` to `active`.
 //!
@@ -16,9 +16,14 @@
 //! NOT wired here — the event is still emitted, so a future `payroll.OnboardingEnrolledHandler` can
 //! subscribe to `onboarding.completed` and enroll without changing the producer. See ADR-005 TODO.
 //!
+//! Tenancy: none, by design (ADR-0029). The module carries no scoping column; a composing service
+//! that decorates these tables org-scoped has its middleware bind an org request scope, which every
+//! verb propagates onto its transaction. The company id the downstream seams still key on (the
+//! outbox record, the event payload's `company_id`) is read off that ambient scope, fail-closed
+//! when absent.
+//!
 //! This is a user-owned custom file — it is NEVER regenerated.
 
-use backbone_orm::company_scope;
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
 use sqlx::{PgPool, Row};
@@ -47,7 +52,7 @@ pub struct NewOnboarding {
 /// Errors from the onboarding write-service.
 #[derive(Debug, thiserror::Error)]
 pub enum OnboardingCompleteError {
-    /// No `Onboarding` exists for the given id in the caller's company.
+    /// No `Onboarding` exists for the given id in the caller's scope.
     #[error("onboarding {0} not found")]
     NotFound(Uuid),
     /// The onboarding exists but is not `in_progress` (only an in-progress onboarding may be
@@ -73,6 +78,14 @@ pub enum OnboardingCompleteError {
         onboarding_id: Uuid,
         probation_end_date: chrono::NaiveDate,
     },
+    /// A write that must hand a company id to a still-company-keyed sibling seam (the
+    /// outbox record, the event payload's `company_id` read by company-scoped consumers)
+    /// found no ambient org scope carrying one. Fail-closed by design (ADR-0029): the
+    /// module is tenant-agnostic and never guesses a company — the caller binds one, via
+    /// the composing service's org request scope (middleware, a job wrapper, or an
+    /// equivalent test harness).
+    #[error("no org scope bound: this operation must run under a request scope that carries a company (the outbox record and downstream consumers key on it)")]
+    NoCompanyScope,
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -91,6 +104,7 @@ impl OnboardingCompleteError {
             OnboardingCompleteError::NotCompleted { .. } => "onboarding_not_completed",
             OnboardingCompleteError::ProbationNotPlanned { .. } => "probation_not_planned",
             OnboardingCompleteError::ProbationNotEnded { .. } => "probation_not_ended",
+            OnboardingCompleteError::NoCompanyScope => "no_company_scope",
             OnboardingCompleteError::Db(_) => "internal_error",
             OnboardingCompleteError::Outbox(_) => "internal_error",
         }
@@ -104,7 +118,9 @@ impl OnboardingCompleteError {
             | OnboardingCompleteError::NotCompleted { .. }
             | OnboardingCompleteError::ProbationNotPlanned { .. }
             | OnboardingCompleteError::ProbationNotEnded { .. } => 422,
-            OnboardingCompleteError::Db(_) | OnboardingCompleteError::Outbox(_) => 500,
+            OnboardingCompleteError::NoCompanyScope
+            | OnboardingCompleteError::Db(_)
+            | OnboardingCompleteError::Outbox(_) => 500,
         }
     }
 }
@@ -124,28 +140,37 @@ impl OnboardingWriteService {
         Self { pool }
     }
 
+    /// The company id for the seams that still key on one (the outbox record, the event
+    /// payload's `company_id`). Sourced from the ambient org scope the COMPOSING service
+    /// binds; absent → fail-closed. The module never guesses a company.
+    fn legacy_company_id() -> Result<Uuid, OnboardingCompleteError> {
+        backbone_orm::org_scope::current_org_scope()
+            .and_then(|s| s.legacy_company_id())
+            .ok_or(OnboardingCompleteError::NoCompanyScope)
+    }
+
     /// Record an onboarding journey in the `in_progress` state — opening it starts it.
     ///
-    /// Scoped to the caller's company (the tenant comes from the auth context, never the
-    /// body). Returns the new onboarding id. `probation_end_date` is the confirmation
-    /// gate [`Self::confirm`] enforces later.
-    pub async fn create(
-        &self,
-        company: Uuid,
-        input: NewOnboarding,
-    ) -> Result<Uuid, OnboardingCompleteError> {
+    /// Scoped by whatever request scope the composing service has bound (the org scope comes
+    /// from the auth context, never the body). Returns the new onboarding id.
+    /// `probation_end_date` is the confirmation gate [`Self::confirm`] enforces later.
+    pub async fn create(&self, input: NewOnboarding) -> Result<Uuid, OnboardingCompleteError> {
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // rows a deployment's fence decorates are invisible to an unscoped connection.
+        // Unfenced deployments have no ambient scope and skip this entirely.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let id = Uuid::new_v4();
         sqlx::query(
             r#"INSERT INTO lifecycle.onboardings
-                   (id, company_id, employee_id, start_date, status,
+                   (id, employee_id, start_date, status,
                     probation_end_date, template_id, metadata)
-               VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7::jsonb)"#,
+               VALUES ($1, $2, $3, 'in_progress', $4, $5, $6::jsonb)"#,
         )
         .bind(id)
-        .bind(company)
         .bind(input.employee_id)
         .bind(input.start_date)
         .bind(input.probation_end_date)
@@ -179,24 +204,28 @@ impl OnboardingWriteService {
     /// [`OnboardingCompleteError::NotInProgress`].
     pub async fn complete(
         &self,
-        company: Uuid,
         onboarding_id: Uuid,
     ) -> Result<Option<Uuid>, OnboardingCompleteError> {
+        // The outbox record and payload are company-keyed (the relay's routing axis; the
+        // employee consumer reads `company_id`), so fail closed before touching the DB.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        // Bind the caller's company before any statement: the whole path runs
-        // under the row-level fence, so a row from another tenant is invisible
-        // (a cross-tenant id reads as NotFound, never as a mutable target).
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // a row from another unit is invisible under the composing fence (a cross-scope id
+        // reads as NotFound, never as a mutable target).
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         // Lock the onboarding row for the duration of the state change + the outbox stage.
         let row = sqlx::query(
-            r#"SELECT company_id, employee_id, status::text AS status
+            r#"SELECT employee_id, status::text AS status
                  FROM lifecycle.onboardings
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(onboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -208,7 +237,6 @@ impl OnboardingWriteService {
             }
         };
 
-        let company_id: Uuid = row.try_get("company_id")?;
         let employee_id: Uuid = row.try_get("employee_id")?;
         let status: String = row.try_get("status")?;
 
@@ -231,12 +259,10 @@ impl OnboardingWriteService {
         let open_count: i64 = sqlx::query_scalar(
             r#"SELECT count(*) FROM lifecycle.onboarding_tasks
                 WHERE onboarding_id = $1
-                  AND company_id = $2
                   AND status::text IN ('pending', 'blocked')
                   AND (metadata->>'deleted_at') IS NULL"#,
         )
         .bind(onboarding_id)
-        .bind(company)
         .fetch_one(&mut *tx)
         .await?;
         if open_count > 0 {
@@ -247,22 +273,21 @@ impl OnboardingWriteService {
             });
         }
 
-        // 1. Apply the state change. The company predicate is belt-and-braces on top of the
-        //    row fence: the id was just read under `FOR UPDATE` within this scope, so the two
-        //    can never disagree — but writing the tenant explicitly keeps the invariant visible
-        //    in the statement itself.
+        // 1. Apply the state change. The row was just read under `FOR UPDATE` within this
+        //    transaction, so the id is already a mutable target; the fence (when the
+        //    deployment decorates these tables) narrows it further.
         sqlx::query(
             r#"UPDATE lifecycle.onboardings
                   SET status = 'completed', completed_at = NOW()
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(onboarding_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
 
         // 2. Assemble the payload. The employee consumer flips the employment to `active`; future
-        //    payroll enrollment will key off the same employee_id.
+        //    payroll enrollment will key off the same employee_id. `company_id` stays in the
+        //    payload: downstream consumers are still company-scoped and read it.
         let payload = serde_json::json!({
             "onboarding_id": onboarding_id,
             "company_id": company_id,
@@ -302,22 +327,25 @@ impl OnboardingWriteService {
     ///   (Consumer-side inbox dedup is the mandatory backstop regardless.)
     pub async fn confirm(
         &self,
-        company: Uuid,
         onboarding_id: Uuid,
         force: bool,
     ) -> Result<Option<Uuid>, OnboardingCompleteError> {
+        // The outbox record and payload are company-keyed; fail closed before touching the DB.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let row = sqlx::query(
             r#"SELECT employee_id, status::text AS status,
                       probation_end_date, confirmed_at
                  FROM lifecycle.onboardings
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(onboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -362,23 +390,24 @@ impl OnboardingWriteService {
             });
         }
 
-        // 1. Apply the state change: stamp the confirmation exactly once (same belt-and-braces
-        //    company predicate as the other state-change writes).
+        // 1. Apply the state change: stamp the confirmation exactly once. The row was just
+        //    read under `FOR UPDATE` within this transaction; the fence (when the deployment
+        //    decorates these tables) narrows it further.
         sqlx::query(
             r#"UPDATE lifecycle.onboardings
                   SET confirmed_at = NOW()
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(onboarding_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
 
         // 2. Assemble the payload. The employee consumer appends an employment history row
         //    (action='confirmation') and CAS-flips employment_status probation→permanent.
+        //    `company_id` stays: downstream consumers are still company-scoped and read it.
         let payload = serde_json::json!({
             "onboarding_id": onboarding_id,
-            "company_id": company,
+            "company_id": company_id,
             "employee_id": employee_id,
             "confirmation_date": today.to_string(),
         });
@@ -389,7 +418,7 @@ impl OnboardingWriteService {
             PROBATION_CONFIRMED_EVENT_TYPE,
             "Onboarding",
             onboarding_id.to_string(),
-            company,
+            company_id,
             payload,
             Utc::now(),
         )

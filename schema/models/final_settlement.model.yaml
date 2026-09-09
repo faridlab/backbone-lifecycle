@@ -20,11 +20,6 @@ models:
         attributes: ["@id", "@default(uuid)"]
         description: "Unique final settlement id"
 
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "Org owner # logical FK organization.Company.id"
-
       employee_id:
         type: uuid
         attributes: ["@required", "@exclude_from_foreign_key_check"]
@@ -86,10 +81,6 @@ models:
         description: "Audit metadata"
 
     indexes:
-      - type: index
-        fields: [company_id]
-      - type: index
-        fields: [company_id, employee_id]
       - type: index
         fields: [offboarding_id]
       - type: index

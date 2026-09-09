@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.offboardings (
 --     id,
---     company_id,
 --     employee_id,
 --     reason,
 --     notice_date,

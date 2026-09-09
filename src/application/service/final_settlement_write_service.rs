@@ -1,6 +1,6 @@
 //! Custom write-service — the final-settlement draft + GL confirmation.
 //!
-//! Two verbs, both scoped to the caller's company:
+//! Two verbs, both scoped by whatever request scope the composing service has bound:
 //!
 //! - [`FinalSettlementWriteService::draft_from_offboarding`] assembles the leaver's
 //!   final pay packet from the SAME cross-module inputs the close verb used
@@ -16,9 +16,9 @@
 //!   (`status=confirmed` + the post/journal ids) AFTER accounting acks — a
 //!   rejection leaves the draft untouched and retryable, never silently
 //!   unposted, and never confirmed without a GL entry behind it. The
-//!   idempotency key is `final_settlement:{company}:{id}`, stable per
-//!   settlement, so a retry after a transport failure reuses accounting's dedup
-//!   instead of double-posting.
+//!   idempotency key is `final_settlement:{company}:{id}` (the company read off
+//!   the ambient org scope), stable per settlement, so a retry after a transport
+//!   failure reuses accounting's dedup instead of double-posting.
 //!
 //! Posting shape (severance-type items only — final-period base pay flows
 //! through payroll, not this envelope):
@@ -33,6 +33,13 @@
 //! closed with `tax_requires_account` until a withholding account joins the
 //! seam. Single currency v1 (IDR), matching the family's posting convention.
 //!
+//! Tenancy: none, by design (ADR-0029). The module carries no scoping column; a
+//! composing service that decorates these tables org-scoped has its middleware
+//! bind an org request scope, which every verb propagates onto its transaction.
+//! The company id the downstream seams still key on (the GL envelope —
+//! accounting is not stripped — and the cross-module pesangon input reads) is
+//! read off that ambient scope, fail-closed when absent.
+//!
 //! This is a user-owned custom file — it is NEVER regenerated.
 
 use crate::application::service::offboarding_ports::OffboardingInputs;
@@ -41,7 +48,6 @@ use crate::domain::entity::OffboardingReason;
 use backbone_gl_posting::{
     AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink,
 };
-use backbone_orm::company_scope;
 use chrono::{Datelike, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
@@ -59,10 +65,10 @@ const SOURCE_TYPE: &str = "final_settlement";
 /// Errors from the final-settlement write-service.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalSettlementError {
-    /// No `Offboarding` exists for the given id in the caller's company.
+    /// No `Offboarding` exists for the given id in the caller's scope.
     #[error("offboarding {0} not found")]
     OffboardingNotFound(Uuid),
-    /// No `FinalSettlement` exists for the given id in the caller's company.
+    /// No `FinalSettlement` exists for the given id in the caller's scope.
     #[error("final settlement {0} not found")]
     NotFound(Uuid),
     /// A settlement already exists for this offboarding (one per offboarding).
@@ -101,6 +107,13 @@ pub enum FinalSettlementError {
     /// The constructed envelope does not balance — a construction bug, never a data condition.
     #[error("internal error: settlement envelope does not balance (debits {0} != credits {1})")]
     Unbalanced(Decimal, Decimal),
+    /// A write that must hand a company id to a still-company-keyed sibling seam (the GL
+    /// posting envelope, the cross-module pesangon input reads) found no ambient org scope
+    /// carrying one. Fail-closed by design (ADR-0029): the module is tenant-agnostic and
+    /// never guesses a company — the caller binds one, via the composing service's org
+    /// request scope (middleware, a job wrapper, or an equivalent test harness).
+    #[error("no org scope bound: this operation must run under a request scope that carries a company (the GL envelope and the pesangon input reads key on it)")]
+    NoCompanyScope,
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -122,6 +135,7 @@ impl FinalSettlementError {
             FinalSettlementError::TaxRequiresAccount(_, _) => "tax_requires_account",
             FinalSettlementError::GlRejected { .. } => "gl_post_rejected",
             FinalSettlementError::Unbalanced(_, _) => "envelope_unbalanced",
+            FinalSettlementError::NoCompanyScope => "no_company_scope",
             FinalSettlementError::Db(_) => "internal_error",
         }
     }
@@ -138,7 +152,9 @@ impl FinalSettlementError {
             | FinalSettlementError::NothingToPost(_)
             | FinalSettlementError::TaxRequiresAccount(_, _)
             | FinalSettlementError::GlRejected { .. } => 422,
-            FinalSettlementError::Unbalanced(_, _) | FinalSettlementError::Db(_) => 500,
+            FinalSettlementError::NoCompanyScope
+            | FinalSettlementError::Unbalanced(_, _)
+            | FinalSettlementError::Db(_) => 500,
         }
     }
 }
@@ -210,6 +226,16 @@ impl FinalSettlementWriteService {
         self
     }
 
+    /// The company id for the seams that still key on one (the GL posting envelope —
+    /// accounting's books owner — and the cross-module pesangon input reads into
+    /// still-company-scoped sibling schemas). Sourced from the ambient org scope the
+    /// COMPOSING service binds; absent → fail-closed. The module never guesses a company.
+    fn legacy_company_id() -> Result<Uuid, FinalSettlementError> {
+        backbone_orm::org_scope::current_org_scope()
+            .and_then(|s| s.legacy_company_id())
+            .ok_or(FinalSettlementError::NoCompanyScope)
+    }
+
     /// Draft the leaver's final settlement from a closed offboarding — idempotently.
     ///
     /// Assembles from the same inputs the close verb used (join date, current salary,
@@ -230,22 +256,26 @@ impl FinalSettlementWriteService {
     ///   makes the double-draft impossible even under concurrency; this surfaces it.
     pub async fn draft_from_offboarding(
         &self,
-        company: Uuid,
         offboarding_id: Uuid,
     ) -> Result<Uuid, FinalSettlementError> {
+        // The pesangon input port reads still-company-scoped sibling schemas
+        // (employee / payroll / timeoff), so fail closed before touching the DB.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        // Bind the caller's company before any statement: the whole path runs
-        // under the row-level fence, so a row from another tenant is invisible
-        // (a cross-tenant id reads as NotFound, never as a source of truth).
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // a row from another unit is invisible under the composing fence (a cross-scope id
+        // reads as NotFound, never as a source of truth).
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let row = sqlx::query(
             r#"SELECT employee_id, reason::text AS reason, last_working_day
                  FROM lifecycle.offboardings
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         let row = match row {
@@ -260,20 +290,22 @@ impl FinalSettlementWriteService {
         let last_working_day: chrono::NaiveDate = row.try_get("last_working_day")?;
 
         // Same cross-module inputs as the close verb, gathered before any write so a
-        // missing prerequisite fails closed (no partial settlement row).
+        // missing prerequisite fails closed (no partial settlement row). The input
+        // tables are not stripped — they keep their own company fences, so the reads
+        // carry the legacy company id explicitly.
         let join_date = self
             .inputs
-            .join_date(company, employee_id)
+            .join_date(company_id, employee_id)
             .await?
             .ok_or(FinalSettlementError::MissingJoinDate { employee_id })?;
         let monthly_salary = self
             .inputs
-            .current_monthly_salary(company, employee_id)
+            .current_monthly_salary(company_id, employee_id)
             .await?
             .ok_or(FinalSettlementError::MissingSalary { employee_id })?;
         let unused_leave_days = self
             .inputs
-            .remaining_leave_days(company, employee_id)
+            .remaining_leave_days(company_id, employee_id)
             .await?;
 
         let tenure = crate::application::service::offboarding_write_service::tenure_years(
@@ -302,22 +334,21 @@ impl FinalSettlementWriteService {
         let period = last_working_day.format("%Y-%m").to_string();
 
         // One live settlement per offboarding. The partial unique index
-        // (company_id, offboarding_id) WHERE not soft-deleted arbitrates under
-        // concurrency; an empty RETURNING means a draft already exists.
+        // (offboarding_id) WHERE not soft-deleted arbitrates under concurrency;
+        // an empty RETURNING means a draft already exists.
         let id = Uuid::new_v4();
         let inserted: Option<Uuid> = sqlx::query_scalar(
             r#"INSERT INTO lifecycle.final_settlements
-                   (id, company_id, employee_id, offboarding_id, period, base_pay,
+                   (id, employee_id, offboarding_id, period, base_pay,
                     unused_leave_payout, pesangon_amount, tax_deduction, net_payable,
                     status, metadata)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, 'draft', $10::jsonb)
-               ON CONFLICT (company_id, offboarding_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, 'draft', $9::jsonb)
+               ON CONFLICT (offboarding_id)
                     WHERE (metadata->>'deleted_at') IS NULL
                DO NOTHING
                RETURNING id"#,
         )
         .bind(id)
-        .bind(company)
         .bind(employee_id)
         .bind(offboarding_id)
         .bind(&period)
@@ -338,10 +369,9 @@ impl FinalSettlementWriteService {
                 // Surface the winner, not just the collision.
                 let existing: Option<Uuid> = sqlx::query_scalar(
                     r#"SELECT id FROM lifecycle.final_settlements
-                        WHERE company_id = $1 AND offboarding_id = $2
+                        WHERE offboarding_id = $1
                           AND (metadata->>'deleted_at') IS NULL"#,
                 )
-                .bind(company)
                 .bind(offboarding_id)
                 .fetch_optional(&mut *tx)
                 .await?;
@@ -371,23 +401,27 @@ impl FinalSettlementWriteService {
     /// row `draft` and retryable: 422 to the caller, nothing stamped, nothing posted.
     pub async fn confirm(
         &self,
-        company: Uuid,
         settlement_id: Uuid,
         accounts: SettlementAccounts,
     ) -> Result<Option<GlPostAck>, FinalSettlementError> {
+        // The GL envelope's company_id is accounting's books owner (accounting is not
+        // stripped), so fail closed before touching the DB.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let row = sqlx::query(
             r#"SELECT employee_id, offboarding_id, period, base_pay,
                       unused_leave_payout, pesangon_amount, tax_deduction,
                       status::text AS status, accounting_post_id
                  FROM lifecycle.final_settlements
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(settlement_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         let row = match row {
@@ -462,8 +496,8 @@ impl FinalSettlementWriteService {
         let envelope = AccountingPostEnvelope {
             // Stable per settlement: a retry after a transport failure reuses
             // accounting's dedup instead of double-posting.
-            idempotency_key: format!("final_settlement:{company}:{settlement_id}"),
-            company_id: company,
+            idempotency_key: format!("final_settlement:{company_id}:{settlement_id}"),
+            company_id,
             branch_id: None,
             source_type: SOURCE_TYPE.to_string(),
             source_id: settlement_id,
@@ -494,19 +528,19 @@ impl FinalSettlementWriteService {
             }
         };
 
-        // Belt-and-braces company predicate: the id was read under lock inside this scope;
-        // writing the tenant into the statement keeps the invariant visible in the SQL itself.
+        // Stamp the confirmation. The id was read under lock inside this transaction,
+        // so it is already a mutable target; the fence (when the deployment decorates
+        // these tables) narrows it further.
         sqlx::query(
             r#"UPDATE lifecycle.final_settlements
                   SET status = 'confirmed',
                       accounting_post_id = $2,
                       journal_id = $3
-                WHERE id = $1 AND company_id = $4"#,
+                WHERE id = $1"#,
         )
         .bind(settlement_id)
         .bind(ack.post_id)
         .bind(ack.journal_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;

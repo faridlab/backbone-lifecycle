@@ -49,7 +49,6 @@ impl From<ClearanceItemId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearanceItemDto {
     pub id: ClearanceItemId,
-    pub company_id: Uuid,
     pub offboarding_id: Uuid,
     pub title: String,
     pub clearer_employee_id: Option<Uuid>,
@@ -109,7 +108,6 @@ impl From<ExitInterviewId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExitInterviewDto {
     pub id: ExitInterviewId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub offboarding_id: Option<Uuid>,
     pub conducted_by: Option<Uuid>,
@@ -168,7 +166,6 @@ impl From<FinalSettlementId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalSettlementDto {
     pub id: FinalSettlementId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub offboarding_id: Uuid,
     pub period: String,
@@ -234,7 +231,6 @@ impl From<OffboardingId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OffboardingDto {
     pub id: OffboardingId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub reason: OffboardingReason,
     pub notice_date: NaiveDate,
@@ -294,7 +290,6 @@ impl From<OnboardingId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OnboardingDto {
     pub id: OnboardingId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub start_date: NaiveDate,
     pub status: OnboardingStatus,
@@ -356,7 +351,6 @@ impl From<OnboardingTaskId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OnboardingTaskDto {
     pub id: OnboardingTaskId,
-    pub company_id: Uuid,
     pub onboarding_id: Uuid,
     pub title: String,
     pub category: Option<TaskCategory>,
@@ -418,7 +412,6 @@ impl From<PromotionId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromotionDto {
     pub id: PromotionId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub promotion_type: PromotionType,
     pub position_id_from: Option<Uuid>,

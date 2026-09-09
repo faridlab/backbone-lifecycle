@@ -28,8 +28,17 @@ user_owned:
   # The guarded HTTP composition (read-only CRUD + validated verbs) — the recommended mount.
   - "src/presentation/http/guarded_routes.rs"
 
+  # Hand-authored migrations (the tenancy strip — its ordering guard is hand-written logic,
+  # not schema-derived emission; the file must never carry a generated-file header or be
+  # overwritten back to a company-fenced shape).
+  - "migrations/20260909000000_strip_tenancy.up.sql"
+  - "migrations/20260909000000_strip_tenancy.down.sql"
+
   # Behavior tests (the golden cases / oracle) + BDD features.
   - "tests/features/**"
+  # The career-lifecycle compound-event flow suite (hand-written producer→relay→consumer
+  # integration tests, not schema-derived).
+  - "tests/career_lifecycle_flows.rs"
   # - "tests/*_golden_cases.rs"
   # - "tests/integrity_probes.rs"
 

@@ -107,4 +107,3 @@ async fn test_promotion_api() {
         panic!("{} tests failed", failed.len());
     }
 }
-

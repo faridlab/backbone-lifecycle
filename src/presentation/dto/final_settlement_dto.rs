@@ -35,9 +35,6 @@ use crate::domain::entity::SettlementStatus;
 #[serde(rename_all = "camelCase")]
 pub struct CreateFinalSettlementDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
@@ -75,9 +72,6 @@ pub struct CreateFinalSettlementDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateFinalSettlementDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -117,9 +111,6 @@ pub struct UpdateFinalSettlementDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchFinalSettlementDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
@@ -149,7 +140,7 @@ pub struct PatchFinalSettlementDto {
 impl PatchFinalSettlementDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
     }
 }
 
@@ -167,8 +158,6 @@ impl PatchFinalSettlementDto {
 pub struct FinalSettlementResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
@@ -240,9 +229,9 @@ impl FinalSettlementListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct FinalSettlementSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub offboarding_id: Uuid,
+    pub period: String,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -254,7 +243,6 @@ impl From<FinalSettlement> for FinalSettlementResponseDto {
     fn from(entity: FinalSettlement) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             offboarding_id: entity.offboarding_id,
             period: entity.period,
@@ -276,9 +264,9 @@ impl From<FinalSettlement> for FinalSettlementSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             offboarding_id: entity.offboarding_id,
+            period: entity.period,
             created_at,
         }
     }
@@ -288,7 +276,6 @@ impl From<CreateFinalSettlementDto> for FinalSettlement {
     fn from(dto: CreateFinalSettlementDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             offboarding_id: dto.offboarding_id,
             period: dto.period,
@@ -309,7 +296,6 @@ impl From<&FinalSettlement> for FinalSettlementResponseDto {
     fn from(entity: &FinalSettlement) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             offboarding_id: entity.offboarding_id.clone(),
             period: entity.period.clone(),
@@ -334,7 +320,6 @@ impl backbone_core::FromCreateDto<CreateFinalSettlementDto> for FinalSettlement 
 
 impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement {
     fn apply_update(mut self, dto: UpdateFinalSettlementDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.offboarding_id = dto.offboarding_id;
         self.period = dto.period;
@@ -358,4 +343,3 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
 // Add custom DTOs specific to FinalSettlement here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

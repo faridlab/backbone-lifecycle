@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.exit_interviews (
 --     id,
---     company_id,
 --     employee_id,
 --     offboarding_id,
 --     conducted_by,

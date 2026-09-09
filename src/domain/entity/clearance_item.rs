@@ -50,7 +50,6 @@ impl std::ops::Deref for ClearanceItemId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ClearanceItem {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub offboarding_id: Uuid,
     pub title: String,
     pub clearer_employee_id: Option<Uuid>,
@@ -67,10 +66,9 @@ impl ClearanceItem {
     }
 
     /// Create a new ClearanceItem with required fields
-    pub fn new(company_id: Uuid, offboarding_id: Uuid, title: String, status: ClearanceStatus) -> Self {
+    pub fn new(offboarding_id: Uuid, title: String, status: ClearanceStatus) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             offboarding_id,
             title,
             clearer_employee_id: None,
@@ -153,9 +151,6 @@ impl ClearanceItem {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "offboarding_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.offboarding_id = v; }
                 }
@@ -222,7 +217,6 @@ impl backbone_orm::EntityRepoMeta for ClearanceItem {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("offboarding_id".to_string(), "uuid".to_string());
         m.insert("clearer_employee_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "clearance_status".to_string());
@@ -230,9 +224,6 @@ impl backbone_orm::EntityRepoMeta for ClearanceItem {
     }
     fn search_fields() -> &'static [&'static str] {
         &["title"]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -242,7 +233,6 @@ impl backbone_orm::EntityRepoMeta for ClearanceItem {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct ClearanceItemBuilder {
-    company_id: Option<Uuid>,
     offboarding_id: Option<Uuid>,
     title: Option<String>,
     clearer_employee_id: Option<Uuid>,
@@ -250,12 +240,6 @@ pub struct ClearanceItemBuilder {
 }
 
 impl ClearanceItemBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the offboarding_id field (required)
     pub fn offboarding_id(mut self, value: Uuid) -> Self {
         self.offboarding_id = Some(value);
@@ -284,13 +268,11 @@ impl ClearanceItemBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<ClearanceItem, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let offboarding_id = self.offboarding_id.ok_or_else(|| "offboarding_id is required".to_string())?;
         let title = self.title.ok_or_else(|| "title is required".to_string())?;
 
         Ok(ClearanceItem {
             id: Uuid::new_v4(),
-            company_id,
             offboarding_id,
             title,
             clearer_employee_id: self.clearer_employee_id,

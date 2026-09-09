@@ -44,7 +44,6 @@ pub struct ClearanceItemPaginatedResult {
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
 pub struct ClearanceItemFilter {
-    pub company_id: Option<Uuid>,
     pub offboarding_id: Option<Uuid>,
     pub title: Option<String>,
     pub clearer_employee_id: Option<Uuid>,
@@ -54,7 +53,7 @@ pub struct ClearanceItemFilter {
 impl ClearanceItemFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.company_id.is_some() || self.offboarding_id.is_some() || self.title.is_some() || self.clearer_employee_id.is_some() || self.status.is_some()
+        self.offboarding_id.is_some() || self.title.is_some() || self.clearer_employee_id.is_some() || self.status.is_some()
     }
 }
 

@@ -9,15 +9,20 @@
 //!
 //! That in-tx write is the load-bearing invariant: the promotion-effective transition and the
 //! event-emit commit atomically, so there is never an "effective with no handoff started" window
-//! (nor a handoff for a rolled-back transition). The relay (in backbone-hr-app) drains the row onto
+//! (nor a handoff for a rolled-back transition). The relay (in the composing service) drains the row onto
 //! the integration bus; the consumers apply it idempotently (inbox dedup on the event id, which the
 //! relay preserves end-to-end as the bus envelope id):
 //! - `employee.PromotionEffectiveHandler` — appends `employment_histories` (action='promotion').
 //! - `payroll.PromotionSalaryHandler` — appends `compensation_changes` (change_type='promotion').
 //!
+//! Tenancy: none, by design (ADR-0029). The module carries no scoping column; a composing service
+//! that decorates these tables org-scoped has its middleware bind an org request scope, which every
+//! verb propagates onto its transaction. The company id the downstream seams still key on (the
+//! outbox record, the event payload's `company_id`) is read off that ambient scope, fail-closed
+//! when absent.
+//!
 //! This is a user-owned custom file — it is NEVER regenerated, so it is safe to edit freely.
 
-use backbone_orm::company_scope;
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -48,6 +53,14 @@ pub enum PromotionEffectError {
     /// an already-`approved` one is a no-op, anything else is a domain violation).
     #[error("promotion {promotion_id} is not pending (status: {status})")]
     NotPending { promotion_id: Uuid, status: String },
+    /// A write that must hand a company id to a still-company-keyed sibling seam (the
+    /// outbox record, the event payload's `company_id` read by company-scoped consumers)
+    /// found no ambient org scope carrying one. Fail-closed by design (ADR-0029): the
+    /// module is tenant-agnostic and never guesses a company — the caller binds one, via
+    /// the composing service's org request scope (middleware, a job wrapper, or an
+    /// equivalent test harness).
+    #[error("no org scope bound: this operation must run under a request scope that carries a company (the outbox record and downstream consumers key on it)")]
+    NoCompanyScope,
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -64,6 +77,7 @@ impl PromotionEffectError {
             PromotionEffectError::NotApproved { .. } => "promotion_not_approved",
             PromotionEffectError::NotYetEffective { .. } => "promotion_not_yet_effective",
             PromotionEffectError::NotPending { .. } => "promotion_not_pending",
+            PromotionEffectError::NoCompanyScope => "no_company_scope",
             PromotionEffectError::Db(_) | PromotionEffectError::Outbox(_) => "internal_error",
         }
     }
@@ -74,7 +88,9 @@ impl PromotionEffectError {
             PromotionEffectError::NotApproved { .. }
             | PromotionEffectError::NotYetEffective { .. }
             | PromotionEffectError::NotPending { .. } => 422,
-            PromotionEffectError::Db(_) | PromotionEffectError::Outbox(_) => 500,
+            PromotionEffectError::NoCompanyScope
+            | PromotionEffectError::Db(_)
+            | PromotionEffectError::Outbox(_) => 500,
         }
     }
 }
@@ -113,32 +129,42 @@ impl PromotionWriteService {
         Self { pool }
     }
 
+    /// The company id for the seams that still key on one (the outbox record, the event
+    /// payload's `company_id`). Sourced from the ambient org scope the COMPOSING service
+    /// binds; absent → fail-closed. The module never guesses a company.
+    fn legacy_company_id() -> Result<Uuid, PromotionEffectError> {
+        backbone_orm::org_scope::current_org_scope()
+            .and_then(|s| s.legacy_company_id())
+            .ok_or(PromotionEffectError::NoCompanyScope)
+    }
+
     /// Record a promotion request in the `pending` state — creation is submission.
     ///
-    /// Scoped to the caller's company (the tenant comes from the auth context, never the
-    /// body). Returns the new promotion id. `draft` remains a schema-level state for
-    /// imported records; the guarded surface always enters at `pending`.
-    pub async fn create(
-        &self,
-        company: Uuid,
-        input: NewPromotion,
-    ) -> Result<Uuid, PromotionEffectError> {
+    /// Scoped by whatever request scope the composing service has bound (the org scope comes
+    /// from the auth context, never the body). Returns the new promotion id. `draft` remains
+    /// a schema-level state for imported records; the guarded surface always enters at
+    /// `pending`.
+    pub async fn create(&self, input: NewPromotion) -> Result<Uuid, PromotionEffectError> {
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // rows a deployment's fence decorates are invisible to an unscoped connection.
+        // Unfenced deployments have no ambient scope and skip this entirely.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let id = Uuid::new_v4();
         sqlx::query(
             r#"INSERT INTO lifecycle.promotions
-                   (id, company_id, employee_id, promotion_type,
+                   (id, employee_id, promotion_type,
                     position_id_from, position_id_to, level_id_from, level_id_to,
                     department_id_from, department_id_to, proposed_salary,
                     effective_date, status, requested_by, reason, metadata)
-               VALUES ($1, $2, $3, NULLIF($4, '')::promotion_type,
-                       $5, $6, $7, $8, $9, $10, $11,
-                       $12, 'pending', $13, $14, $15::jsonb)"#,
+               VALUES ($1, $2, NULLIF($3, '')::promotion_type,
+                       $4, $5, $6, $7, $8, $9, $10,
+                       $11, 'pending', $12, $13, $14::jsonb)"#,
         )
         .bind(id)
-        .bind(company)
         .bind(input.employee_id)
         .bind(input.promotion_type)
         .bind(input.position_id_from)
@@ -175,21 +201,21 @@ impl PromotionWriteService {
     ///   submitted, an `effective`/`rejected`/`cancelled` one cannot move this way).
     pub async fn approve(
         &self,
-        company: Uuid,
         promotion_id: Uuid,
         approved_by: Option<Uuid>,
     ) -> Result<bool, PromotionEffectError> {
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let row = sqlx::query(
             r#"SELECT status::text AS status
                  FROM lifecycle.promotions
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(promotion_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         let row = match row {
@@ -213,16 +239,16 @@ impl PromotionWriteService {
             });
         }
 
-        // Belt-and-braces company predicate on the state change: the id was just read under
-        // `FOR UPDATE` inside this scope, so the tenant is written into the statement itself.
+        // Apply the state change. The id was just read under `FOR UPDATE` inside this
+        // transaction, so it is already a mutable target; the fence (when the deployment
+        // decorates these tables) narrows it further.
         sqlx::query(
             r#"UPDATE lifecycle.promotions
                   SET status = 'approved', approved_by = $2
-                WHERE id = $1 AND company_id = $3"#,
+                WHERE id = $1"#,
         )
         .bind(promotion_id)
         .bind(approved_by)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -242,34 +268,38 @@ impl PromotionWriteService {
     ///
     /// Only an `approved` promotion whose `effective_date` has been reached may be effected; any other
     /// non-effective status is a [`PromotionEffectError::NotApproved`], and a future `effective_date`
-    /// is a [`PromotionEffectError::NotYetEffective`]. The caller's `company` scopes the whole path —
-    /// a promotion id from another tenant reads as [`PromotionEffectError::NotFound`].
+    /// is a [`PromotionEffectError::NotYetEffective`]. The composing service's request scope bounds the
+    /// whole path — a promotion id from outside it reads as [`PromotionEffectError::NotFound`].
     pub async fn effect(
         &self,
-        company: Uuid,
         promotion_id: Uuid,
     ) -> Result<Option<Uuid>, PromotionEffectError> {
+        // The outbox record and payload are company-keyed (the relay's routing axis; both
+        // consumers read `company_id`), so fail closed before touching the DB.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        // Bind the caller's company before any statement: the whole path runs
-        // under the row-level fence, so a row from another tenant is invisible
-        // (a cross-tenant id reads as NotFound, never as a mutable target).
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // a row from another unit is invisible under the composing fence (a cross-scope id
+        // reads as NotFound, never as a mutable target).
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         // Lock the promotion row for the duration of the state change + the outbox stage, so a
         // concurrent effect cannot race a second transition. `status::text` — the column is a Postgres
         // enum (`promotion_status`); sqlx will not decode an enum straight to a Rust `String`, so cast
         // here and compare below.
         let row = sqlx::query(
-            r#"SELECT company_id, employee_id, promotion_type::text AS promotion_type,
+            r#"SELECT employee_id, promotion_type::text AS promotion_type,
                       position_id_from, position_id_to, level_id_from, level_id_to,
                       department_id_from, department_id_to, proposed_salary,
                       effective_date, status::text AS status
                  FROM lifecycle.promotions
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(promotion_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -281,7 +311,6 @@ impl PromotionWriteService {
             }
         };
 
-        let company_id: Uuid = row.try_get("company_id")?;
         let employee_id: Uuid = row.try_get("employee_id")?;
         let promotion_type: String = row.try_get("promotion_type")?;
         let position_id_from: Option<Uuid> = row.try_get("position_id_from")?;
@@ -316,21 +345,23 @@ impl PromotionWriteService {
             });
         }
 
-        // 1. Apply the state change (same belt-and-braces company predicate as `approve`).
+        // 1. Apply the state change. The row was just read under `FOR UPDATE` within this
+        //    transaction; the fence (when the deployment decorates these tables) narrows it
+        //    further.
         sqlx::query(
             r#"UPDATE lifecycle.promotions
                   SET status = 'effective'
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(promotion_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
 
         // 2. Assemble the payload. Both consumers read off this same JSON: the employee consumer
         //    appends employment_history (role/level/department from→to); the payroll consumer appends
         //    compensation_changes (proposed_salary). `reference_id=promotion_id` is the idempotency
-        //    link on both receiving tables.
+        //    link on both receiving tables. `company_id` stays: downstream consumers are still
+        //    company-scoped and read it.
         let payload = serde_json::json!({
             "promotion_id": promotion_id,
             "company_id": company_id,

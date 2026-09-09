@@ -15,16 +15,36 @@
 //! Hermetic about schema: builds the minimal DDL each flow touches inline (the producer/consumer SQL
 //! is schema-pinned, so the real module tables are exercised). SKIPS (not fails) when no DB is
 //! reachable; set `DATABASE_URL` to run it for real.
+//!
+//! Tenancy (ADR-0029): the module is tenant-agnostic — its tables carry no scoping column, and
+//! every producer verb reads the company id its still-company-keyed seams need (the outbox
+//! record, the event payload's `company_id`, the cross-module pesangon input reads) off the
+//! ambient org request scope. The suite binds that scope around each producer call with
+//! [`scoped`] — exactly what the composing service's middleware does in production. The consumer
+//! tables (employee / payroll / timeoff) keep their `company_id` columns and seeds: those
+//! siblings are not stripped and their handlers read the payload's `company_id`.
 
 use backbone_lifecycle::application::service::{
     OffboardingWriteService, OnboardingWriteService, PromotionWriteService,
 };
 use backbone_messaging::{IntegrationEventBus, IntegrationEventEnvelope, IntegrationEventHandler};
+use backbone_orm::org_scope::{with_org_request_scope, OrgScope};
 use backbone_outbox::{inbox, outbox, relay, OutboxRecord};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+
+/// Run a producer verb under an org request scope bound to `company_id` — the composing
+/// service's middleware does the same in production. The scope carries the legacy company
+/// the producer hands to its still-company-keyed seams.
+async fn scoped<R>(
+    pool: &PgPool,
+    company_id: Uuid,
+    f: impl std::future::Future<Output = R>,
+) -> Result<R, sqlx::Error> {
+    with_org_request_scope(pool, OrgScope::for_company_unit(company_id), f).await
+}
 
 /// Connect to a scratch DB this suite owns, or `None` to skip.
 ///
@@ -141,7 +161,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
         // ── lifecycle.* (the producers read/write these) ──
         r#"CREATE TABLE IF NOT EXISTS lifecycle.promotions (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                employee_id UUID NOT NULL,
                promotion_type promotion_type NOT NULL DEFAULT 'promotion',
                position_id_from UUID, position_id_to UUID,
@@ -157,7 +176,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.onboardings (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                employee_id UUID NOT NULL,
                start_date DATE NOT NULL,
                status onboarding_status NOT NULL DEFAULT 'pending',
@@ -169,7 +187,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.onboarding_tasks (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                onboarding_id UUID NOT NULL,
                title TEXT NOT NULL,
                category task_category,
@@ -180,7 +197,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.offboardings (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                employee_id UUID NOT NULL,
                reason offboarding_reason NOT NULL DEFAULT 'resignation',
                notice_date DATE NOT NULL,
@@ -190,7 +206,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.clearance_items (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                offboarding_id UUID NOT NULL,
                title TEXT NOT NULL,
                clearer_employee_id UUID,
@@ -199,7 +214,6 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
            )"#,
         r#"CREATE TABLE IF NOT EXISTS lifecycle.final_settlements (
                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-               company_id UUID NOT NULL,
                employee_id UUID NOT NULL,
                offboarding_id UUID NOT NULL,
                period TEXT NOT NULL,
@@ -214,7 +228,8 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
            )"#,
         // One live settlement per offboarding — the idempotency the draft verb surfaces as 409.
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_final_settlements_offboarding ON lifecycle.final_settlements (company_id, offboarding_id) WHERE (metadata->>'deleted_at') IS NULL",
+        // Tenant-free (ADR-0029): the domain invariant needs no tenant column.
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_final_settlements_offboarding ON lifecycle.final_settlements (offboarding_id) WHERE (metadata->>'deleted_at') IS NULL",
         // ── employee.* (the employee consumers write these). The employments shape is a SUPERSET of
         //    backbone-recruitment's hire_flow test (department_id/position_id) so the two hermetic
         //    suites coexist on a shared DB — CREATE TABLE IF NOT EXISTS no-ops on whichever runs second,
@@ -385,11 +400,10 @@ async fn promotion_effective_flow_applies_both_targets_and_is_idempotent(
 
     let promotion_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.promotions
-               (company_id, employee_id, promotion_type, position_id_from, position_id_to,
+               (employee_id, promotion_type, position_id_from, position_id_to,
                 proposed_salary, effective_date, status)
-           VALUES ($1,$2,'promotion',$3,$4,$5,NOW(),'approved') RETURNING id"#,
+           VALUES ($1,'promotion',$2,$3,$4,NOW(),'approved') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .bind(position_from)
     .bind(position_to)
@@ -400,9 +414,8 @@ async fn promotion_effective_flow_applies_both_targets_and_is_idempotent(
 
     // ── 1. PRODUCER: effect() flips approved→effective + stages promotion.effective, in one tx. ──
     let svc = PromotionWriteService::new(pool.clone());
-    let event_id = svc
-        .effect(company_id, promotion_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.effect(promotion_id))
+        .await??
         .expect("fresh effect stages an event");
 
     let promo_status: String =
@@ -548,21 +561,19 @@ async fn promotion_effective_is_idempotent_at_the_producer(
 
     let company_id = Uuid::new_v4();
     let promotion_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.promotions (company_id, employee_id, effective_date, status)
-           VALUES ($1,$2,NOW(),'approved') RETURNING id"#,
+        r#"INSERT INTO lifecycle.promotions (employee_id, effective_date, status)
+           VALUES ($1,NOW(),'approved') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
     .get("id");
 
     let svc = PromotionWriteService::new(pool.clone());
-    let first = svc
-        .effect(company_id, promotion_id)
-        .await?
+    let first = scoped(&pool, company_id, svc.effect(promotion_id))
+        .await??
         .expect("first effect stages an event");
-    let second = svc.effect(company_id, promotion_id).await?;
+    let second = scoped(&pool, company_id, svc.effect(promotion_id)).await??;
     assert!(
         second.is_none(),
         "re-effect of an effective promotion stages no second event"
@@ -603,10 +614,9 @@ async fn onboarding_completed_flow_activates_employment_and_is_idempotent(
     .await?;
 
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -614,9 +624,8 @@ async fn onboarding_completed_flow_activates_employment_and_is_idempotent(
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc
-        .complete(company_id, onboarding_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.complete(onboarding_id))
+        .await??
         .expect("fresh complete stages an event");
 
     let ob = sqlx::query(
@@ -697,26 +706,24 @@ async fn onboarding_complete_rejects_open_tasks() -> Result<(), Box<dyn std::err
 
     let company_id = Uuid::new_v4();
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
     .get("id");
 
     sqlx::query(
-        r#"INSERT INTO lifecycle.onboarding_tasks (company_id, onboarding_id, title, status)
-           VALUES ($1,$2,'collect docs','pending')"#,
+        r#"INSERT INTO lifecycle.onboarding_tasks (onboarding_id, title, status)
+           VALUES ($1,'collect docs','pending')"#,
     )
-    .bind(company_id)
     .bind(onboarding_id)
     .execute(&pool)
     .await?;
 
     let svc = OnboardingWriteService::new(pool.clone());
-    let res = svc.complete(company_id, onboarding_id).await;
+    let res = scoped(&pool, company_id, svc.complete(onboarding_id)).await?;
     assert!(
         res.is_err(),
         "complete() rejects when a task is still pending"
@@ -783,10 +790,9 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
 
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -796,9 +802,8 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     // with_pool = pool-backed inputs + current-law pesangon config (the same wiring the lifecycle
     // module builder uses by default).
     let svc = OffboardingWriteService::with_pool(pool.clone());
-    let event_id = svc
-        .close(company_id, offboarding_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.close(offboarding_id))
+        .await??
         .expect("fresh close stages an event");
 
     let ob_status: String =
@@ -976,10 +981,9 @@ async fn offboarding_closed_also_zeroes_leave_balance_and_is_idempotent(
 
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -987,9 +991,8 @@ async fn offboarding_closed_also_zeroes_leave_balance_and_is_idempotent(
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OffboardingWriteService::with_pool(pool.clone());
-    let event_id = svc
-        .close(company_id, offboarding_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.close(offboarding_id))
+        .await??
         .expect("fresh close stages an event");
     assert_eq!(
         outbox::pending_count(&pool, "lifecycle").await?,
@@ -1089,10 +1092,9 @@ async fn onboarding_completed_also_seeds_initial_compensation_and_is_idempotent(
     .await?;
 
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -1100,9 +1102,8 @@ async fn onboarding_completed_also_seeds_initial_compensation_and_is_idempotent(
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc
-        .complete(company_id, onboarding_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.complete(onboarding_id))
+        .await??
         .expect("fresh complete stages an event");
     assert_eq!(
         outbox::pending_count(&pool, "lifecycle").await?,
@@ -1208,19 +1209,17 @@ async fn onboarding_enrolled_skips_when_no_starting_salary(
     .await?;
 
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
     .get("id");
 
     let svc = OnboardingWriteService::new(pool.clone());
-    let event_id = svc
-        .complete(company_id, onboarding_id)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.complete(onboarding_id))
+        .await??
         .expect("fresh complete stages an event");
 
     let bus = IntegrationEventBus::new();
@@ -1311,10 +1310,9 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
 
     // In-flight onboarding: confirmation is refused (it runs on a finished journey).
     let in_flight: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -1323,10 +1321,9 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     // Completed with a FUTURE probation end: refused without force, allowed with it.
     let future_end = Utc::now().date_naive() + chrono::Duration::days(30);
     let gated: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status, probation_end_date)
-           VALUES ($1,$2,NOW(),'completed',$3) RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status, probation_end_date)
+           VALUES ($1,NOW(),'completed',$2) RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .bind(future_end)
     .fetch_one(&pool)
@@ -1336,10 +1333,9 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     // Completed with a PAST probation end: the happy path.
     let past_end = Utc::now().date_naive() - chrono::Duration::days(1);
     let ready: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status, probation_end_date)
-           VALUES ($1,$2,NOW(),'completed',$3) RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status, probation_end_date)
+           VALUES ($1,NOW(),'completed',$2) RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .bind(past_end)
     .fetch_one(&pool)
@@ -1349,9 +1345,8 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     let svc = OnboardingWriteService::new(pool.clone());
 
     // Gate 1: not completed.
-    let err = svc
-        .confirm(company_id, in_flight, false)
-        .await
+    let err = scoped(&pool, company_id, svc.confirm(in_flight, false))
+        .await?
         .expect_err("in-flight onboarding cannot confirm");
     assert!(
         matches!(
@@ -1362,9 +1357,8 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     );
 
     // Gate 2: date not reached, no force.
-    let err = svc
-        .confirm(company_id, gated, false)
-        .await
+    let err = scoped(&pool, company_id, svc.confirm(gated, false))
+        .await?
         .expect_err("future probation end refuses without force");
     assert!(
         matches!(
@@ -1380,9 +1374,8 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     );
 
     // Force overrides the date gate.
-    let forced = svc
-        .confirm(company_id, gated, true)
-        .await?
+    let forced = scoped(&pool, company_id, svc.confirm(gated, true))
+        .await??
         .expect("force confirms past the date gate");
     assert_eq!(
         sqlx::query_scalar::<_, String>(
@@ -1395,11 +1388,10 @@ async fn probation_confirm_gates_on_completion_date_and_force_then_emits_once(
     );
 
     // Happy path + producer idempotency.
-    let event_id = svc
-        .confirm(company_id, ready, false)
-        .await?
+    let event_id = scoped(&pool, company_id, svc.confirm(ready, false))
+        .await??
         .expect("past-end onboarding confirms");
-    let replay = svc.confirm(company_id, ready, false).await?;
+    let replay = scoped(&pool, company_id, svc.confirm(ready, false)).await??;
     assert!(replay.is_none(), "re-confirm stages no second event");
 
     let confirmed_at: Option<DateTime<Utc>> =
@@ -1447,22 +1439,19 @@ async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit(
     setup(&pool).await?;
     truncate_all(&pool).await?;
 
-    let company_id = Uuid::new_v4();
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status)
-           VALUES ($1,$2,NOW(),'in_progress') RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status)
+           VALUES ($1,NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
     .get("id");
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
@@ -1475,17 +1464,14 @@ async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit(
         ClearanceItemWriteService::new(pool.clone(), std::sync::Arc::new(UnwiredActivitySink));
 
     let err = unwired_tasks
-        .create_task(
-            company_id,
-            NewOnboardingTask {
-                onboarding_id,
-                title: "collect docs".into(),
-                category: Some("document".into()),
-                owner_employee_id: None,
-                due_date: None,
-                notify_user_id: Some(Uuid::new_v4()),
-            },
-        )
+        .create_task(NewOnboardingTask {
+            onboarding_id,
+            title: "collect docs".into(),
+            category: Some("document".into()),
+            owner_employee_id: None,
+            due_date: None,
+            notify_user_id: Some(Uuid::new_v4()),
+        })
         .await
         .expect_err("notify against the unwired seam fails closed");
     assert!(
@@ -1504,15 +1490,12 @@ async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit(
     assert_eq!(task_count, 0, "fail-closed notify wrote no row");
 
     let err = unwired_clearance
-        .create_clearance_item(
-            company_id,
-            NewClearanceItem {
-                offboarding_id,
-                title: "return laptop".into(),
-                clearer_employee_id: None,
-                notify_user_id: Some(Uuid::new_v4()),
-            },
-        )
+        .create_clearance_item(NewClearanceItem {
+            offboarding_id,
+            title: "return laptop".into(),
+            clearer_employee_id: None,
+            notify_user_id: Some(Uuid::new_v4()),
+        })
         .await
         .expect_err("clearance notify against the unwired seam fails closed");
     assert!(
@@ -1525,17 +1508,14 @@ async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit(
 
     // ── Silent create (no notify): the row records, nothing is scheduled. ──
     unwired_tasks
-        .create_task(
-            company_id,
-            NewOnboardingTask {
-                onboarding_id,
-                title: "silent task".into(),
-                category: None,
-                owner_employee_id: None,
-                due_date: None,
-                notify_user_id: None,
-            },
-        )
+        .create_task(NewOnboardingTask {
+            onboarding_id,
+            title: "silent task".into(),
+            category: None,
+            owner_employee_id: None,
+            due_date: None,
+            notify_user_id: None,
+        })
         .await?;
     let silent: Option<String> = sqlx::query_scalar(
         "SELECT status::text FROM lifecycle.onboarding_tasks WHERE onboarding_id=$1",
@@ -1555,17 +1535,14 @@ async fn checkpoint_creates_fail_closed_then_record_and_notify_after_commit(
     let due = chrono::NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
     let user_id = Uuid::new_v4();
     wired_tasks
-        .create_task(
-            company_id,
-            NewOnboardingTask {
-                onboarding_id,
-                title: "equipment handout".into(),
-                category: Some("equipment".into()),
-                owner_employee_id: None,
-                due_date: Some(due),
-                notify_user_id: Some(user_id),
-            },
-        )
+        .create_task(NewOnboardingTask {
+            onboarding_id,
+            title: "equipment handout".into(),
+            category: Some("equipment".into()),
+            owner_employee_id: None,
+            due_date: Some(due),
+            notify_user_id: Some(user_id),
+        })
         .await?;
 
     let recorded = recorder.0.lock().unwrap().clone();
@@ -1631,10 +1608,9 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     .await?;
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'efficiency','2024-01-01','2024-01-01','cleared') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(employee_id)
     .fetch_one(&pool)
     .await?
@@ -1642,9 +1618,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
 
     // ── DRAFT: assembles from the same inputs the close verb used. ────────────────────────────
     let svc = FinalSettlementWriteService::with_pool(pool.clone());
-    let settlement_id = svc
-        .draft_from_offboarding(company_id, offboarding_id)
-        .await?;
+    let settlement_id = scoped(&pool, company_id, svc.draft_from_offboarding(offboarding_id))
+        .await??;
 
     // base_pay = 22M × 1/31 (2024-01-01, 31-day month) = 709,677.42
     // pesangon_amount = 88M + 88M + 26.4M = 202,400,000 · leave = 5,000,000
@@ -1678,9 +1653,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     assert!(row.get::<Option<Uuid>, _>("accounting_post_id").is_none());
 
     // Double draft → the collision surfaces the winner's id.
-    let err = svc
-        .draft_from_offboarding(company_id, offboarding_id)
-        .await
+    let err = scoped(&pool, company_id, svc.draft_from_offboarding(offboarding_id))
+        .await?
         .expect_err("second draft for the same offboarding is rejected");
     match err {
         FinalSettlementError::AlreadyDrafted {
@@ -1702,9 +1676,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     };
 
     // ── CONFIRM, unwired: loud 422, row stays draft + unstamped. ──────────────────────────────
-    let err = svc
-        .confirm(company_id, settlement_id, accounts)
-        .await
+    let err = scoped(&pool, company_id, svc.confirm(settlement_id, accounts))
+        .await?
         .expect_err("unwired GL seam refuses the confirm");
     match &err {
         FinalSettlementError::GlRejected { code, .. } => {
@@ -1729,9 +1702,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
         .await?;
     let sink = std::sync::Arc::new(AckingGlSink(std::sync::Mutex::new(None)));
     let wired = FinalSettlementWriteService::with_pool(pool.clone()).with_gl_sink(sink.clone());
-    let err = wired
-        .confirm(company_id, settlement_id, accounts)
-        .await
+    let err = scoped(&pool, company_id, wired.confirm(settlement_id, accounts))
+        .await?
         .expect_err("a drafted tax deduction refuses the confirm");
     assert!(
         matches!(err, FinalSettlementError::TaxRequiresAccount(_, t) if t == Decimal::new(1_000_000, 0)),
@@ -1743,9 +1715,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
         .await?;
 
     // ── CONFIRM, wired: ack → stamp; envelope balanced + dedup-stable. ────────────────────────
-    let ack = wired
-        .confirm(company_id, settlement_id, accounts)
-        .await?
+    let ack = scoped(&pool, company_id, wired.confirm(settlement_id, accounts))
+        .await??
         .expect("wired sink acks the confirm");
     let stamped: (String, Uuid, Uuid) = sqlx::query_as(
         "SELECT status::text AS status, accounting_post_id, journal_id FROM lifecycle.final_settlements WHERE id=$1",
@@ -1783,7 +1754,7 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     );
 
     // Producer idempotency: a re-confirm sends no second envelope.
-    let replay = wired.confirm(company_id, settlement_id, accounts).await?;
+    let replay = scoped(&pool, company_id, wired.confirm(settlement_id, accounts)).await??;
     assert!(replay.is_none(), "re-confirm is a no-op");
     assert!(
         sink.0.lock().unwrap().is_some(),
@@ -1806,13 +1777,11 @@ async fn offboarding_clear_asserts_the_clearance_derivation(
     setup(&pool).await?;
     truncate_all(&pool).await?;
 
-    let company_id = Uuid::new_v4();
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
     )
-    .bind(company_id)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
@@ -1820,17 +1789,16 @@ async fn offboarding_clear_asserts_the_clearance_derivation(
 
     // A pending item blocks the clear.
     sqlx::query(
-        r#"INSERT INTO lifecycle.clearance_items (company_id, offboarding_id, title, status)
-           VALUES ($1,$2,'revoke access','pending')"#,
+        r#"INSERT INTO lifecycle.clearance_items (offboarding_id, title, status)
+           VALUES ($1,'revoke access','pending')"#,
     )
-    .bind(company_id)
     .bind(offboarding_id)
     .execute(&pool)
     .await?;
 
     let svc = OffboardingWriteService::with_pool(pool.clone());
     let err = svc
-        .clear(company_id, offboarding_id)
+        .clear(offboarding_id)
         .await
         .expect_err("open item blocks the clear");
     assert!(
@@ -1850,11 +1818,11 @@ async fn offboarding_clear_asserts_the_clearance_derivation(
         .execute(&pool)
         .await?;
     assert!(
-        svc.clear(company_id, offboarding_id).await?,
+        svc.clear(offboarding_id).await?,
         "resolved items let the clear through"
     );
     assert!(
-        !svc.clear(company_id, offboarding_id).await?,
+        !svc.clear(offboarding_id).await?,
         "re-clear is a no-op"
     );
 
@@ -1867,17 +1835,20 @@ async fn offboarding_clear_asserts_the_clearance_derivation(
     Ok(())
 }
 
-/// A verb keyed with another tenant's ids must fail closed as NotFound and mutate nothing.
+/// A producer verb with NO ambient org scope fails closed and mutates nothing.
 ///
-/// Every verb scopes its read by the CALLER's company (the tenant comes from the auth
-/// context, never from the row), so an id leaked across tenants is inert: it reads as
-/// missing, not as a writable target. This suite runs on a bare connection with no row
-/// fence active, which is exactly what makes the probe meaningful — the company
-/// predicate alone must hold, and the live service posture (row fence on top) only
-/// narrows it further. Probes one verb per workflow carrier, then asserts zero
+/// The module is tenant-agnostic (ADR-0029): it never guesses a company. The seams that
+/// still key on one — the outbox record, the event payload's `company_id` (the downstream
+/// consumers are still company-scoped and read it), the cross-module pesangon input reads —
+/// take that company from the request scope the composing service binds. With no scope
+/// bound, every producer verb refuses with `NoCompanyScope` before any statement runs:
+/// nothing mutates, nothing stages. Probes one verb per producer service, then asserts zero
 /// mutation and zero staged events.
 #[tokio::test]
-async fn verbs_fail_closed_across_tenants() -> Result<(), Box<dyn std::error::Error>> {
+async fn producers_fail_closed_without_a_bound_org_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    use backbone_lifecycle::application::service::{FinalSettlementWriteService, FinalSettlementError};
+
     let pool = match connect().await {
         Some(p) => p,
         None => return Ok(()),
@@ -1885,16 +1856,12 @@ async fn verbs_fail_closed_across_tenants() -> Result<(), Box<dyn std::error::Er
     setup(&pool).await?;
     truncate_all(&pool).await?;
 
-    let company_a = Uuid::new_v4();
-    let company_b = Uuid::new_v4();
-
-    // Company A owns one row per workflow carrier, each parked one verb away from a
-    // state change (so a cross-tenant success would be visible in the row).
+    // One row per workflow carrier, each parked one verb away from a state change (so an
+    // unscoped success would be visible in the row).
     let promotion_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.promotions (company_id, employee_id, effective_date, status)
-           VALUES ($1,$2,NOW(),'approved') RETURNING id"#,
+        r#"INSERT INTO lifecycle.promotions (employee_id, effective_date, status)
+           VALUES ($1,NOW(),'approved') RETURNING id"#,
     )
-    .bind(company_a)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
@@ -1902,10 +1869,9 @@ async fn verbs_fail_closed_across_tenants() -> Result<(), Box<dyn std::error::Er
 
     let past_end = Utc::now().date_naive() - chrono::Duration::days(1);
     let onboarding_id: Uuid = sqlx::query(
-        r#"INSERT INTO lifecycle.onboardings (company_id, employee_id, start_date, status, probation_end_date)
-           VALUES ($1,$2,NOW(),'completed',$3) RETURNING id"#,
+        r#"INSERT INTO lifecycle.onboardings (employee_id, start_date, status, probation_end_date)
+           VALUES ($1,NOW(),'completed',$2) RETURNING id"#,
     )
-    .bind(company_a)
     .bind(Uuid::new_v4())
     .bind(past_end)
     .fetch_one(&pool)
@@ -1914,100 +1880,98 @@ async fn verbs_fail_closed_across_tenants() -> Result<(), Box<dyn std::error::Er
 
     let offboarding_id: Uuid = sqlx::query(
         r#"INSERT INTO lifecycle.offboardings
-               (company_id, employee_id, reason, notice_date, last_working_day, status)
-           VALUES ($1,$2,'resignation',NOW(),NOW(),'in_progress') RETURNING id"#,
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,'resignation',NOW(),NOW(),'cleared') RETURNING id"#,
     )
-    .bind(company_a)
     .bind(Uuid::new_v4())
     .fetch_one(&pool)
     .await?
     .get("id");
 
-    // Company B calls A's verbs: every one reads NotFound, never a writable target.
+    // Bare pool, no scope bound: every producer verb is NoCompanyScope, never a guess.
     let err = PromotionWriteService::new(pool.clone())
-        .effect(company_b, promotion_id)
+        .effect(promotion_id)
         .await
-        .expect_err("cross-tenant effect fails closed");
+        .expect_err("unscoped effect fails closed");
     assert!(
         matches!(
             err,
-            backbone_lifecycle::application::service::PromotionEffectError::NotFound(_)
+            backbone_lifecycle::application::service::PromotionEffectError::NoCompanyScope
         ),
-        "cross-tenant effect is NotFound, got {err:?}"
+        "unscoped effect is NoCompanyScope, got {err:?}"
     );
 
     let onb = OnboardingWriteService::new(pool.clone());
     let err = onb
-        .complete(company_b, onboarding_id)
+        .complete(onboarding_id)
         .await
-        .expect_err("cross-tenant complete fails closed");
+        .expect_err("unscoped complete fails closed");
     assert!(
         matches!(
             err,
-            backbone_lifecycle::application::service::OnboardingCompleteError::NotFound(_)
+            backbone_lifecycle::application::service::OnboardingCompleteError::NoCompanyScope
         ),
-        "cross-tenant complete is NotFound, got {err:?}"
+        "unscoped complete is NoCompanyScope, got {err:?}"
     );
     let err = onb
-        .confirm(company_b, onboarding_id, true)
+        .confirm(onboarding_id, false)
         .await
-        .expect_err("cross-tenant confirm fails closed");
+        .expect_err("unscoped confirm fails closed");
     assert!(
         matches!(
             err,
-            backbone_lifecycle::application::service::OnboardingCompleteError::NotFound(_)
+            backbone_lifecycle::application::service::OnboardingCompleteError::NoCompanyScope
         ),
-        "cross-tenant confirm is NotFound, got {err:?}"
+        "unscoped confirm is NoCompanyScope, got {err:?}"
     );
 
-    let off = OffboardingWriteService::with_pool(pool.clone());
-    let err = off
-        .clear(company_b, offboarding_id)
+    let err = OffboardingWriteService::with_pool(pool.clone())
+        .close(offboarding_id)
         .await
-        .expect_err("cross-tenant clear fails closed");
+        .expect_err("unscoped close fails closed");
     assert!(
         matches!(
             err,
-            backbone_lifecycle::application::service::OffboardingCloseError::NotFound(_)
+            backbone_lifecycle::application::service::OffboardingCloseError::NoCompanyScope
         ),
-        "cross-tenant clear is NotFound, got {err:?}"
+        "unscoped close is NoCompanyScope, got {err:?}"
     );
 
-    // Zero mutation, zero events: A's rows are exactly as seeded.
+    let err = FinalSettlementWriteService::with_pool(pool.clone())
+        .draft_from_offboarding(offboarding_id)
+        .await
+        .expect_err("unscoped settlement draft fails closed");
+    assert!(
+        matches!(err, FinalSettlementError::NoCompanyScope),
+        "unscoped settlement draft is NoCompanyScope, got {err:?}"
+    );
+
+    // Zero mutation, zero events: the rows are exactly as seeded.
     let promo_status: String =
         sqlx::query_scalar("SELECT status::text FROM lifecycle.promotions WHERE id=$1")
             .bind(promotion_id)
             .fetch_one(&pool)
             .await?;
-    assert_eq!(
-        promo_status, "approved",
-        "cross-tenant effect mutated nothing"
-    );
+    assert_eq!(promo_status, "approved", "unscoped effect mutated nothing");
 
     let confirmed_at: Option<DateTime<Utc>> =
         sqlx::query_scalar("SELECT confirmed_at FROM lifecycle.onboardings WHERE id=$1")
             .bind(onboarding_id)
             .fetch_one(&pool)
             .await?;
-    assert!(
-        confirmed_at.is_none(),
-        "cross-tenant confirm stamped nothing"
-    );
+    assert!(confirmed_at.is_none(), "unscoped confirm stamped nothing");
 
     let off_status: String =
         sqlx::query_scalar("SELECT status::text FROM lifecycle.offboardings WHERE id=$1")
             .bind(offboarding_id)
             .fetch_one(&pool)
             .await?;
-    assert_eq!(
-        off_status, "in_progress",
-        "cross-tenant clear mutated nothing"
-    );
+    assert_eq!(off_status, "cleared", "unscoped close mutated nothing");
 
     assert_eq!(
         outbox::pending_count(&pool, "lifecycle").await?,
         0,
-        "no event staged by a cross-tenant call"
+        "no event staged by an unscoped call"
     );
     Ok(())
 }

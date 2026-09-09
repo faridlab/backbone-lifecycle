@@ -35,9 +35,6 @@ use crate::domain::entity::OffboardingStatus;
 #[serde(rename_all = "camelCase")]
 pub struct CreateOffboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     pub reason: OffboardingReason,
@@ -63,9 +60,6 @@ pub struct CreateOffboardingDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOffboardingDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -93,9 +87,6 @@ pub struct UpdateOffboardingDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchOffboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -113,7 +104,7 @@ pub struct PatchOffboardingDto {
 impl PatchOffboardingDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.reason.is_some() || self.notice_date.is_some() || self.last_working_day.is_some() || self.status.is_some()
+        self.employee_id.is_some() || self.reason.is_some() || self.notice_date.is_some() || self.last_working_day.is_some() || self.status.is_some()
     }
 }
 
@@ -131,8 +122,6 @@ impl PatchOffboardingDto {
 pub struct OffboardingResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     pub reason: OffboardingReason,
@@ -198,9 +187,9 @@ impl OffboardingListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct OffboardingSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub reason: OffboardingReason,
+    pub notice_date: NaiveDate,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -212,7 +201,6 @@ impl From<Offboarding> for OffboardingResponseDto {
     fn from(entity: Offboarding) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             reason: entity.reason,
             notice_date: entity.notice_date,
@@ -228,9 +216,9 @@ impl From<Offboarding> for OffboardingSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             reason: entity.reason,
+            notice_date: entity.notice_date,
             created_at,
         }
     }
@@ -240,7 +228,6 @@ impl From<CreateOffboardingDto> for Offboarding {
     fn from(dto: CreateOffboardingDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             reason: dto.reason,
             notice_date: dto.notice_date,
@@ -255,7 +242,6 @@ impl From<&Offboarding> for OffboardingResponseDto {
     fn from(entity: &Offboarding) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             reason: entity.reason.clone(),
             notice_date: entity.notice_date.clone(),
@@ -274,7 +260,6 @@ impl backbone_core::FromCreateDto<CreateOffboardingDto> for Offboarding {
 
 impl backbone_core::ApplyUpdateDto<UpdateOffboardingDto> for Offboarding {
     fn apply_update(mut self, dto: UpdateOffboardingDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.reason = dto.reason;
         self.notice_date = dto.notice_date;
@@ -292,4 +277,3 @@ impl backbone_core::ApplyUpdateDto<UpdateOffboardingDto> for Offboarding {
 // Add custom DTOs specific to Offboarding here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

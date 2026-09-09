@@ -17,11 +17,6 @@ models:
         attributes: ["@id", "@default(uuid)"]
         description: "Unique task id"
 
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "Org owner # logical FK organization.Company.id"
-
       onboarding_id:
         type: uuid
         attributes: ["@required", "@foreign_key(Onboarding.id)"]
@@ -56,8 +51,6 @@ models:
         description: "Audit metadata"
 
     indexes:
-      - type: index
-        fields: [company_id]
       - type: index
         fields: [onboarding_id]
       - type: index

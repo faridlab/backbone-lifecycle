@@ -34,9 +34,6 @@ use crate::domain::entity::ClearanceStatus;
 #[serde(rename_all = "camelCase")]
 pub struct CreateClearanceItemDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "offboarding_id")]
     pub offboarding_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -59,9 +56,6 @@ pub struct CreateClearanceItemDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateClearanceItemDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "offboarding_id")]
     pub offboarding_id: Uuid,
@@ -86,9 +80,6 @@ pub struct UpdateClearanceItemDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchClearanceItemDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "offboarding_id")]
     pub offboarding_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -103,7 +94,7 @@ pub struct PatchClearanceItemDto {
 impl PatchClearanceItemDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.offboarding_id.is_some() || self.title.is_some() || self.clearer_employee_id.is_some() || self.status.is_some()
+        self.offboarding_id.is_some() || self.title.is_some() || self.clearer_employee_id.is_some() || self.status.is_some()
     }
 }
 
@@ -121,8 +112,6 @@ impl PatchClearanceItemDto {
 pub struct ClearanceItemResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub offboarding_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -186,9 +175,9 @@ impl ClearanceItemListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct ClearanceItemSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub offboarding_id: Uuid,
     pub title: String,
+    pub clearer_employee_id: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -200,7 +189,6 @@ impl From<ClearanceItem> for ClearanceItemResponseDto {
     fn from(entity: ClearanceItem) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             offboarding_id: entity.offboarding_id,
             title: entity.title,
             clearer_employee_id: entity.clearer_employee_id,
@@ -215,9 +203,9 @@ impl From<ClearanceItem> for ClearanceItemSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             offboarding_id: entity.offboarding_id,
             title: entity.title,
+            clearer_employee_id: entity.clearer_employee_id,
             created_at,
         }
     }
@@ -227,7 +215,6 @@ impl From<CreateClearanceItemDto> for ClearanceItem {
     fn from(dto: CreateClearanceItemDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             offboarding_id: dto.offboarding_id,
             title: dto.title,
             clearer_employee_id: dto.clearer_employee_id,
@@ -241,7 +228,6 @@ impl From<&ClearanceItem> for ClearanceItemResponseDto {
     fn from(entity: &ClearanceItem) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             offboarding_id: entity.offboarding_id.clone(),
             title: entity.title.clone(),
             clearer_employee_id: entity.clearer_employee_id.clone(),
@@ -259,7 +245,6 @@ impl backbone_core::FromCreateDto<CreateClearanceItemDto> for ClearanceItem {
 
 impl backbone_core::ApplyUpdateDto<UpdateClearanceItemDto> for ClearanceItem {
     fn apply_update(mut self, dto: UpdateClearanceItemDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.offboarding_id = dto.offboarding_id;
         self.title = dto.title;
         self.clearer_employee_id = dto.clearer_employee_id;
@@ -276,4 +261,3 @@ impl backbone_core::ApplyUpdateDto<UpdateClearanceItemDto> for ClearanceItem {
 // Add custom DTOs specific to ClearanceItem here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

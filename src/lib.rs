@@ -155,8 +155,9 @@ impl LifecycleModule {
 
     // <<< CUSTOM METHODS
     /// The guarded surface: read-only CRUD for every entity + the validated write verbs
-    /// (workflow transitions, checkpoint creates, settlement draft/confirm), each taking the
-    /// caller's company off the auth context and passing it down. This is the production
+    /// (workflow transitions, checkpoint creates, settlement draft/confirm), each gated on the
+    /// org context the composing service's org auth layer inserts (the acting identity comes off
+    /// the signed token; the database scope is the one the host bound). This is the production
     /// mount — generic mutation never reaches it.
     pub fn guarded_routes(&self) -> Router {
         presentation::http::create_guarded_lifecycle_routes(self)

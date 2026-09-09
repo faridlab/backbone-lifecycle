@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.clearance_items (
 --     id,
---     company_id,
 --     offboarding_id,
 --     title,
 --     clearer_employee_id,

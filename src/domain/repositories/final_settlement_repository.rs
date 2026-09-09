@@ -44,7 +44,6 @@ pub struct FinalSettlementPaginatedResult {
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
 pub struct FinalSettlementFilter {
-    pub company_id: Option<Uuid>,
     pub employee_id: Option<Uuid>,
     pub offboarding_id: Option<Uuid>,
     pub period: Option<String>,
@@ -56,7 +55,7 @@ pub struct FinalSettlementFilter {
 impl FinalSettlementFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
     }
 }
 

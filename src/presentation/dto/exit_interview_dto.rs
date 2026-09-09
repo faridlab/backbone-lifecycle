@@ -33,9 +33,6 @@ use crate::domain::entity::AuditMetadata;
 #[serde(rename_all = "camelCase")]
 pub struct CreateExitInterviewDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "offboarding_id")]
@@ -60,9 +57,6 @@ pub struct CreateExitInterviewDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateExitInterviewDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -89,9 +83,6 @@ pub struct UpdateExitInterviewDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchExitInterviewDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "offboarding_id")]
@@ -107,7 +98,7 @@ pub struct PatchExitInterviewDto {
 impl PatchExitInterviewDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.conducted_by.is_some() || self.responses.is_some() || self.would_recommend.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.conducted_by.is_some() || self.responses.is_some() || self.would_recommend.is_some()
     }
 }
 
@@ -125,8 +116,6 @@ impl PatchExitInterviewDto {
 pub struct ExitInterviewResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     pub offboarding_id: Option<Uuid>,
@@ -190,9 +179,9 @@ impl ExitInterviewListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct ExitInterviewSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub offboarding_id: Option<Uuid>,
+    pub conducted_by: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -204,7 +193,6 @@ impl From<ExitInterview> for ExitInterviewResponseDto {
     fn from(entity: ExitInterview) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             offboarding_id: entity.offboarding_id,
             conducted_by: entity.conducted_by,
@@ -220,9 +208,9 @@ impl From<ExitInterview> for ExitInterviewSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             offboarding_id: entity.offboarding_id,
+            conducted_by: entity.conducted_by,
             created_at,
         }
     }
@@ -232,7 +220,6 @@ impl From<CreateExitInterviewDto> for ExitInterview {
     fn from(dto: CreateExitInterviewDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             offboarding_id: dto.offboarding_id,
             conducted_by: dto.conducted_by,
@@ -247,7 +234,6 @@ impl From<&ExitInterview> for ExitInterviewResponseDto {
     fn from(entity: &ExitInterview) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             offboarding_id: entity.offboarding_id.clone(),
             conducted_by: entity.conducted_by.clone(),
@@ -266,7 +252,6 @@ impl backbone_core::FromCreateDto<CreateExitInterviewDto> for ExitInterview {
 
 impl backbone_core::ApplyUpdateDto<UpdateExitInterviewDto> for ExitInterview {
     fn apply_update(mut self, dto: UpdateExitInterviewDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.offboarding_id = dto.offboarding_id;
         self.conducted_by = dto.conducted_by;
@@ -284,4 +269,3 @@ impl backbone_core::ApplyUpdateDto<UpdateExitInterviewDto> for ExitInterview {
 // Add custom DTOs specific to ExitInterview here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

@@ -34,9 +34,6 @@ use crate::domain::entity::OnboardingStatus;
 #[serde(rename_all = "camelCase")]
 pub struct CreateOnboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
@@ -66,9 +63,6 @@ pub struct CreateOnboardingDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOnboardingDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -100,9 +94,6 @@ pub struct UpdateOnboardingDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchOnboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
@@ -123,7 +114,7 @@ pub struct PatchOnboardingDto {
 impl PatchOnboardingDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.start_date.is_some() || self.status.is_some() || self.completed_at.is_some() || self.probation_end_date.is_some() || self.confirmed_at.is_some() || self.template_id.is_some()
+        self.employee_id.is_some() || self.start_date.is_some() || self.status.is_some() || self.completed_at.is_some() || self.probation_end_date.is_some() || self.confirmed_at.is_some() || self.template_id.is_some()
     }
 }
 
@@ -141,8 +132,6 @@ impl PatchOnboardingDto {
 pub struct OnboardingResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
@@ -209,9 +198,9 @@ impl OnboardingListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct OnboardingSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub start_date: NaiveDate,
+    pub status: OnboardingStatus,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -223,7 +212,6 @@ impl From<Onboarding> for OnboardingResponseDto {
     fn from(entity: Onboarding) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             start_date: entity.start_date,
             status: entity.status,
@@ -241,9 +229,9 @@ impl From<Onboarding> for OnboardingSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             start_date: entity.start_date,
+            status: entity.status,
             created_at,
         }
     }
@@ -253,7 +241,6 @@ impl From<CreateOnboardingDto> for Onboarding {
     fn from(dto: CreateOnboardingDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             start_date: dto.start_date,
             status: dto.status,
@@ -270,7 +257,6 @@ impl From<&Onboarding> for OnboardingResponseDto {
     fn from(entity: &Onboarding) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             start_date: entity.start_date.clone(),
             status: entity.status.clone(),
@@ -291,7 +277,6 @@ impl backbone_core::FromCreateDto<CreateOnboardingDto> for Onboarding {
 
 impl backbone_core::ApplyUpdateDto<UpdateOnboardingDto> for Onboarding {
     fn apply_update(mut self, dto: UpdateOnboardingDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.start_date = dto.start_date;
         self.status = dto.status;
@@ -311,4 +296,3 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingDto> for Onboarding {
 // Add custom DTOs specific to Onboarding here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

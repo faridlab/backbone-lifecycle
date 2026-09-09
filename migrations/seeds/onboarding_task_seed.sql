@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.onboarding_tasks (
 --     id,
---     company_id,
 --     onboarding_id,
 --     title,
 --     category,

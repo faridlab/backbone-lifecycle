@@ -2595,16 +2595,12 @@ components:
       type: object
       required:
         - id
-        - company_id
         - offboarding_id
         - title
         - status
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         offboarding_id:
@@ -2637,15 +2633,11 @@ components:
     CreateClearanceItemRequest:
       type: object
       required:
-        - company_id
         - offboarding_id
         - title
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         offboarding_id:
           type: string
           format: uuid
@@ -2663,15 +2655,11 @@ components:
     UpdateClearanceItemRequest:
       type: object
       required:
-        - company_id
         - offboarding_id
         - title
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         offboarding_id:
           type: string
           format: uuid
@@ -2689,9 +2677,6 @@ components:
     PatchClearanceItemRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         offboarding_id:
           type: string
           format: uuid
@@ -2720,15 +2705,11 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - responses
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2766,14 +2747,10 @@ components:
     CreateExitInterviewRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - responses
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2796,14 +2773,10 @@ components:
     UpdateExitInterviewRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - responses
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2826,9 +2799,6 @@ components:
     PatchExitInterviewRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2862,7 +2832,6 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - offboarding_id
         - period
@@ -2872,9 +2841,6 @@ components:
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2927,7 +2893,6 @@ components:
     CreateFinalSettlementRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - offboarding_id
         - period
@@ -2936,9 +2901,6 @@ components:
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2976,7 +2938,6 @@ components:
     UpdateFinalSettlementRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - offboarding_id
         - period
@@ -2985,9 +2946,6 @@ components:
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3025,9 +2983,6 @@ components:
     PatchFinalSettlementRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3076,7 +3031,6 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - reason
         - notice_date
@@ -3085,9 +3039,6 @@ components:
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -3122,7 +3073,6 @@ components:
     CreateOffboardingRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - reason
         - notice_date
@@ -3130,9 +3080,6 @@ components:
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3152,7 +3099,6 @@ components:
     UpdateOffboardingRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - reason
         - notice_date
@@ -3160,9 +3106,6 @@ components:
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3182,9 +3125,6 @@ components:
     PatchOffboardingRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3215,16 +3155,12 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - start_date
         - status
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -3270,15 +3206,11 @@ components:
     CreateOnboardingRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - start_date
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3309,15 +3241,11 @@ components:
     UpdateOnboardingRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - start_date
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3348,9 +3276,6 @@ components:
     PatchOnboardingRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3392,16 +3317,12 @@ components:
       type: object
       required:
         - id
-        - company_id
         - onboarding_id
         - title
         - status
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         onboarding_id:
@@ -3441,15 +3362,11 @@ components:
     CreateOnboardingTaskRequest:
       type: object
       required:
-        - company_id
         - onboarding_id
         - title
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         onboarding_id:
           type: string
           format: uuid
@@ -3474,15 +3391,11 @@ components:
     UpdateOnboardingTaskRequest:
       type: object
       required:
-        - company_id
         - onboarding_id
         - title
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         onboarding_id:
           type: string
           format: uuid
@@ -3507,9 +3420,6 @@ components:
     PatchOnboardingTaskRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         onboarding_id:
           type: string
           format: uuid
@@ -3545,7 +3455,6 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - promotion_type
         - effective_date
@@ -3553,9 +3462,6 @@ components:
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -3629,16 +3535,12 @@ components:
     CreatePromotionRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - promotion_type
         - effective_date
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3697,16 +3599,12 @@ components:
     UpdatePromotionRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - promotion_type
         - effective_date
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -3765,9 +3663,6 @@ components:
     PatchPromotionRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid

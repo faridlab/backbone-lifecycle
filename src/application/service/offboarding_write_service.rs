@@ -18,18 +18,23 @@
 //! acyclic. (See ADR-005.)
 //!
 //! That in-tx write is the load-bearing invariant: the close transition and the event-emit commit
-//! atomically. The relay (in backbone-hr-app) drains the row onto the integration bus; the consumers
+//! atomically. The relay (in the composing service) drains the row onto the integration bus; the consumers
 //! apply it idempotently (inbox dedup on the event id):
 //! - `employee.OffboardingClosedHandler` — flips `employments.status` to `inactive`.
 //! - `payroll.OffboardingSettlementHandler` — appends `compensation_changes` (change_type='offboarding',
 //!   `new_amount` = the carried pesangon `total`, note carrying the full breakdown).
+//!
+//! Tenancy: none, by design (ADR-0029). The module carries no scoping column; a composing service
+//! that decorates these tables org-scoped has its middleware bind an org request scope, which every
+//! verb propagates onto its transaction. The company id the downstream seams still key on (the
+//! outbox record, the event payload's `company_id`, the cross-module pesangon input reads into
+//! still-company-scoped sibling schemas) is read off that ambient scope, fail-closed when absent.
 //!
 //! This is a user-owned custom file — it is NEVER regenerated.
 
 use crate::application::service::offboarding_ports::OffboardingInputs;
 use crate::application::service::pesangon::{pesangon, PesangonConfig};
 use crate::domain::entity::OffboardingReason;
-use backbone_orm::company_scope;
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -88,6 +93,14 @@ pub enum OffboardingCloseError {
     /// The pesangon calc rejected the reason (unknown to the config's `reason_rules`).
     #[error("pesangon calc: {0}")]
     Pesangon(#[from] crate::application::service::pesangon::PesangonError),
+    /// A write that must hand a company id to a still-company-keyed sibling seam (the
+    /// outbox record, the event payload's `company_id`, the cross-module pesangon input
+    /// reads) found no ambient org scope carrying one. Fail-closed by design (ADR-0029):
+    /// the module is tenant-agnostic and never guesses a company — the caller binds one,
+    /// via the composing service's org request scope (middleware, a job wrapper, or an
+    /// equivalent test harness).
+    #[error("no org scope bound: this operation must run under a request scope that carries a company (the outbox record, the downstream consumers, and the pesangon input reads key on it)")]
+    NoCompanyScope,
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -108,6 +121,7 @@ impl OffboardingCloseError {
             OffboardingCloseError::MissingSalary { .. } => "missing_salary",
             OffboardingCloseError::BadReason(_) => "invalid_offboarding_reason",
             OffboardingCloseError::Pesangon(_) => "pesangon_calc_error",
+            OffboardingCloseError::NoCompanyScope => "no_company_scope",
             OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => "internal_error",
         }
     }
@@ -122,7 +136,9 @@ impl OffboardingCloseError {
             | OffboardingCloseError::MissingSalary { .. }
             | OffboardingCloseError::BadReason(_)
             | OffboardingCloseError::Pesangon(_) => 422,
-            OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => 500,
+            OffboardingCloseError::NoCompanyScope
+            | OffboardingCloseError::Db(_)
+            | OffboardingCloseError::Outbox(_) => 500,
         }
     }
 }
@@ -170,30 +186,41 @@ impl OffboardingWriteService {
         Self::new(pool, inputs, PesangonConfig::default())
     }
 
+    /// The company id for the seams that still key on one (the outbox record, the event
+    /// payload's `company_id`, the cross-module pesangon input reads into still-company-scoped
+    /// sibling schemas). Sourced from the ambient org scope the COMPOSING service binds;
+    /// absent → fail-closed. The module never guesses a company.
+    fn legacy_company_id() -> Result<Uuid, OffboardingCloseError> {
+        backbone_orm::org_scope::current_org_scope()
+            .and_then(|s| s.legacy_company_id())
+            .ok_or(OffboardingCloseError::NoCompanyScope)
+    }
+
     /// Record an offboarding in the `in_progress` state — recording the notice starts the
     /// exit workflow.
     ///
-    /// Scoped to the caller's company (the tenant comes from the auth context, never the
-    /// body). Returns the new offboarding id. The `clear` verb gates the move to `cleared`;
-    /// `close` (the compound-event producer) only runs on a cleared row.
-    pub async fn create(
-        &self,
-        company: Uuid,
-        input: NewOffboarding,
-    ) -> Result<Uuid, OffboardingCloseError> {
+    /// Scoped by whatever request scope the composing service has bound (the org scope comes
+    /// from the auth context, never the body). Returns the new offboarding id. The `clear`
+    /// verb gates the move to `cleared`; `close` (the compound-event producer) only runs on
+    /// a cleared row.
+    pub async fn create(&self, input: NewOffboarding) -> Result<Uuid, OffboardingCloseError> {
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // rows a deployment's fence decorates are invisible to an unscoped connection.
+        // Unfenced deployments have no ambient scope and skip this entirely.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let id = Uuid::new_v4();
         sqlx::query(
             r#"INSERT INTO lifecycle.offboardings
-                   (id, company_id, employee_id, reason, notice_date, last_working_day,
+                   (id, employee_id, reason, notice_date, last_working_day,
                     status, metadata)
-               VALUES ($1, $2, $3, NULLIF($4, '')::offboarding_reason, $5, $6,
-                       'in_progress', $7::jsonb)"#,
+               VALUES ($1, $2, NULLIF($3, '')::offboarding_reason, $4, $5,
+                       'in_progress', $6::jsonb)"#,
         )
         .bind(id)
-        .bind(company)
         .bind(input.employee_id)
         .bind(input.reason)
         .bind(input.notice_date)
@@ -221,22 +248,19 @@ impl OffboardingWriteService {
     /// - `Ok(true)` on a fresh clear.
     /// - `Ok(false)` if the offboarding was already `cleared` or `closed` (idempotent no-op).
     /// - [`OffboardingCloseError::NotInProgress`] for any other status.
-    pub async fn clear(
-        &self,
-        company: Uuid,
-        offboarding_id: Uuid,
-    ) -> Result<bool, OffboardingCloseError> {
+    pub async fn clear(&self, offboarding_id: Uuid) -> Result<bool, OffboardingCloseError> {
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let row = sqlx::query(
             r#"SELECT status::text AS status
                  FROM lifecycle.offboardings
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         let row = match row {
@@ -267,12 +291,10 @@ impl OffboardingWriteService {
         let open_count: i64 = sqlx::query_scalar(
             r#"SELECT count(*) FROM lifecycle.clearance_items
                 WHERE offboarding_id = $1
-                  AND company_id = $2
                   AND status::text IN ('pending', 'blocked')
                   AND (metadata->>'deleted_at') IS NULL"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .fetch_one(&mut *tx)
         .await?;
         if open_count > 0 {
@@ -283,15 +305,15 @@ impl OffboardingWriteService {
             });
         }
 
-        // Belt-and-braces company predicate on the state change: the id was just read under
-        // `FOR UPDATE` inside this scope, so the tenant is written into the statement itself.
+        // Apply the state change. The id was just read under `FOR UPDATE` inside this
+        // transaction, so it is already a mutable target; the fence (when the deployment
+        // decorates these tables) narrows it further.
         sqlx::query(
             r#"UPDATE lifecycle.offboardings
                   SET status = 'cleared'
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -314,24 +336,29 @@ impl OffboardingWriteService {
     /// closed — the offboarding is NOT closed and NO event is staged.
     pub async fn close(
         &self,
-        company: Uuid,
         offboarding_id: Uuid,
     ) -> Result<Option<Uuid>, OffboardingCloseError> {
+        // The outbox record and payload are company-keyed (the relay's routing axis; both
+        // consumers read `company_id`), and the pesangon input port reads still-company-scoped
+        // sibling schemas — all fail closed when no ambient scope carries a company.
+        let company_id = Self::legacy_company_id()?;
+
         let mut tx = self.pool.begin().await?;
-        // Bind the caller's company before any statement: the whole path runs
-        // under the row-level fence, so a row from another tenant is invisible
-        // (a cross-tenant id reads as NotFound, never as a mutable target).
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // a row from another unit is invisible under the composing fence (a cross-scope id
+        // reads as NotFound, never as a mutable target).
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         // Lock the offboarding row for the duration of the state change + the outbox stage.
         let row = sqlx::query(
-            r#"SELECT company_id, employee_id, reason::text AS reason, last_working_day, status::text AS status
+            r#"SELECT employee_id, reason::text AS reason, last_working_day, status::text AS status
                  FROM lifecycle.offboardings
-                WHERE id = $1 AND company_id = $2
+                WHERE id = $1
                 FOR UPDATE"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -343,7 +370,6 @@ impl OffboardingWriteService {
             }
         };
 
-        let company_id: Uuid = row.try_get("company_id")?;
         let employee_id: Uuid = row.try_get("employee_id")?;
         let reason: String = row.try_get("reason")?;
         let last_working_day: chrono::NaiveDate = row.try_get("last_working_day")?;
@@ -364,21 +390,22 @@ impl OffboardingWriteService {
 
         // ── Gather the three cross-module pesangon inputs. These are read-only cross-schema
         //    lookups, run before the state change so a missing prerequisite fails closed (the
-        //    offboarding is NOT closed and NO event is staged). Each read runs inside the
-        //    company scope too — the input tables carry their own fences. ────────────────────
+        //    offboarding is NOT closed and NO event is staged). The input tables (employee /
+        //    payroll / timeoff) are not stripped — they keep their own company fences, so the
+        //    reads carry the legacy company id explicitly. ─────────────────────────────────
         let join_date = self
             .inputs
-            .join_date(company, employee_id)
+            .join_date(company_id, employee_id)
             .await?
             .ok_or(OffboardingCloseError::MissingJoinDate { employee_id })?;
         let monthly_salary = self
             .inputs
-            .current_monthly_salary(company, employee_id)
+            .current_monthly_salary(company_id, employee_id)
             .await?
             .ok_or(OffboardingCloseError::MissingSalary { employee_id })?;
         let unused_leave_days = self
             .inputs
-            .remaining_leave_days(company, employee_id)
+            .remaining_leave_days(company_id, employee_id)
             .await?;
 
         // Tenure in years (Decimal) from day-level math: days_between / 365.25.
@@ -395,14 +422,15 @@ impl OffboardingWriteService {
             &self.cfg,
         )?;
 
-        // 1. Apply the state change (same belt-and-braces company predicate as `clear`).
+        // 1. Apply the state change. The row was just read under `FOR UPDATE` within this
+        //    transaction; the fence (when the deployment decorates these tables) narrows it
+        //    further.
         sqlx::query(
             r#"UPDATE lifecycle.offboardings
                   SET status = 'closed'
-                WHERE id = $1 AND company_id = $2"#,
+                WHERE id = $1"#,
         )
         .bind(offboarding_id)
-        .bind(company)
         .execute(&mut *tx)
         .await?;
 
@@ -411,6 +439,7 @@ impl OffboardingWriteService {
         //    new_amount = breakdown.total. `reference_id=offboarding_id` is the idempotency link on
         //    both receiving tables. The full breakdown + the calc inputs are carried so the event is
         //    self-auditing (payroll never needs to recompute or call back into lifecycle).
+        //    `company_id` stays: downstream consumers are still company-scoped and read it.
         let payload = serde_json::json!({
             "offboarding_id": offboarding_id,
             "company_id": company_id,

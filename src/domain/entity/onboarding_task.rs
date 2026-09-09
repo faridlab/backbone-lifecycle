@@ -51,7 +51,6 @@ impl std::ops::Deref for OnboardingTaskId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct OnboardingTask {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub onboarding_id: Uuid,
     pub title: String,
     pub category: Option<TaskCategory>,
@@ -70,10 +69,9 @@ impl OnboardingTask {
     }
 
     /// Create a new OnboardingTask with required fields
-    pub fn new(company_id: Uuid, onboarding_id: Uuid, title: String, status: TaskStatus) -> Self {
+    pub fn new(onboarding_id: Uuid, title: String, status: TaskStatus) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             onboarding_id,
             title,
             category: None,
@@ -170,9 +168,6 @@ impl OnboardingTask {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "onboarding_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.onboarding_id = v; }
                 }
@@ -245,7 +240,6 @@ impl backbone_orm::EntityRepoMeta for OnboardingTask {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("onboarding_id".to_string(), "uuid".to_string());
         m.insert("owner_employee_id".to_string(), "uuid".to_string());
         m.insert("category".to_string(), "task_category".to_string());
@@ -255,9 +249,6 @@ impl backbone_orm::EntityRepoMeta for OnboardingTask {
     fn search_fields() -> &'static [&'static str] {
         &["title"]
     }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
-    }
 }
 
 /// Builder for OnboardingTask entity
@@ -266,7 +257,6 @@ impl backbone_orm::EntityRepoMeta for OnboardingTask {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct OnboardingTaskBuilder {
-    company_id: Option<Uuid>,
     onboarding_id: Option<Uuid>,
     title: Option<String>,
     category: Option<TaskCategory>,
@@ -276,12 +266,6 @@ pub struct OnboardingTaskBuilder {
 }
 
 impl OnboardingTaskBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the onboarding_id field (required)
     pub fn onboarding_id(mut self, value: Uuid) -> Self {
         self.onboarding_id = Some(value);
@@ -322,13 +306,11 @@ impl OnboardingTaskBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<OnboardingTask, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let onboarding_id = self.onboarding_id.ok_or_else(|| "onboarding_id is required".to_string())?;
         let title = self.title.ok_or_else(|| "title is required".to_string())?;
 
         Ok(OnboardingTask {
             id: Uuid::new_v4(),
-            company_id,
             onboarding_id,
             title,
             category: self.category,

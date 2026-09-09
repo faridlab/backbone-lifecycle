@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.promotions (
 --     id,
---     company_id,
 --     employee_id,
 --     promotion_type,
 --     position_id_from,

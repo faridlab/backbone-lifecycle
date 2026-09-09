@@ -11,12 +11,12 @@
 //! called after commit — it owns its own durability, so a failure there leaves
 //! the checkpoint recorded (the true state) and is surfaced for retry.
 //!
-//! Every verb takes the caller's `company` and binds it onto the transaction
-//! before any statement runs, so the whole path is correct under the strict
-//! company fence (row-level security).
+//! Tenancy: none, by design (ADR-0029). The module carries no scoping column;
+//! a composing service that decorates these tables org-scoped has its
+//! middleware bind an org request scope, which every verb propagates onto its
+//! transaction. Unfenced deployments have no ambient scope and skip the bind.
 
 use crate::application::service::activity_port::{ActivityCommand, ActivityRejected, ActivitySink};
-use backbone_orm::company_scope;
 use chrono::NaiveDate;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -25,10 +25,10 @@ use uuid::Uuid;
 /// Errors from the checkpoint write-services.
 #[derive(Debug, thiserror::Error)]
 pub enum CheckpointError {
-    /// No onboarding exists for the given id in the caller's company.
+    /// No onboarding exists for the given id in the caller's scope.
     #[error("onboarding {0} not found")]
     OnboardingNotFound(Uuid),
-    /// No offboarding exists for the given id in the caller's company.
+    /// No offboarding exists for the given id in the caller's scope.
     #[error("offboarding {0} not found")]
     OffboardingNotFound(Uuid),
     /// The caller asked to notify but no activity adapter is wired.
@@ -107,20 +107,26 @@ impl OnboardingTaskWriteService {
     ///
     /// Fails closed before any write when `notify_user_id` is set but the seam
     /// is unwired. Returns the new task id.
-    pub async fn create_task(&self, company: Uuid, input: NewOnboardingTask) -> Result<Uuid, CheckpointError> {
+    pub async fn create_task(&self, input: NewOnboardingTask) -> Result<Uuid, CheckpointError> {
         if input.notify_user_id.is_some() && !self.activities.is_wired() {
             return Err(CheckpointError::ActivitySeamUnwired);
         }
 
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        // Propagate the ambient request scope, when one is bound, onto this transaction:
+        // rows a deployment's fence decorates are invisible to an unscoped connection.
+        // Unfenced deployments have no ambient scope and skip this entirely.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
-        // The parent onboarding must exist in this company (fenced check).
+        // The parent onboarding must exist within the bound scope (a fenced
+        // deployment makes rows from other units invisible, so a foreign id
+        // reads as a missing parent).
         let parent: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM lifecycle.onboardings WHERE id = $1 AND company_id = $2",
+            "SELECT id FROM lifecycle.onboardings WHERE id = $1",
         )
         .bind(input.onboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         if parent.is_none() {
@@ -133,12 +139,11 @@ impl OnboardingTaskWriteService {
         let summary = format!("onboarding task: {}", input.title);
         sqlx::query(
             r#"INSERT INTO lifecycle.onboarding_tasks
-                   (id, company_id, onboarding_id, title, category, owner_employee_id,
+                   (id, onboarding_id, title, category, owner_employee_id,
                     due_date, status, metadata)
-               VALUES ($1, $2, $3, $4, NULLIF($5, '')::task_category, $6, $7, 'pending', $8::jsonb)"#,
+               VALUES ($1, $2, $3, NULLIF($4, '')::task_category, $5, $6, 'pending', $7::jsonb)"#,
         )
         .bind(id)
-        .bind(company)
         .bind(input.onboarding_id)
         .bind(input.title)
         .bind(input.category)
@@ -184,7 +189,6 @@ impl ClearanceItemWriteService {
     /// is unwired. Returns the new item id.
     pub async fn create_clearance_item(
         &self,
-        company: Uuid,
         input: NewClearanceItem,
     ) -> Result<Uuid, CheckpointError> {
         if input.notify_user_id.is_some() && !self.activities.is_wired() {
@@ -192,13 +196,14 @@ impl ClearanceItemWriteService {
         }
 
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, company).await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
 
         let parent: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM lifecycle.offboardings WHERE id = $1 AND company_id = $2",
+            "SELECT id FROM lifecycle.offboardings WHERE id = $1",
         )
         .bind(input.offboarding_id)
-        .bind(company)
         .fetch_optional(&mut *tx)
         .await?;
         if parent.is_none() {
@@ -211,11 +216,10 @@ impl ClearanceItemWriteService {
         let summary = format!("clearance item: {}", input.title);
         sqlx::query(
             r#"INSERT INTO lifecycle.clearance_items
-                   (id, company_id, offboarding_id, title, clearer_employee_id, status, metadata)
-               VALUES ($1, $2, $3, $4, $5, 'pending', $6::jsonb)"#,
+                   (id, offboarding_id, title, clearer_employee_id, status, metadata)
+               VALUES ($1, $2, $3, $4, 'pending', $5::jsonb)"#,
         )
         .bind(id)
-        .bind(company)
         .bind(input.offboarding_id)
         .bind(input.title)
         .bind(input.clearer_employee_id)

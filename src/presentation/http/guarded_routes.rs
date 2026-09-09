@@ -18,11 +18,14 @@
 //!   lifecycle state directly and sidestep a verb's side effects (the
 //!   outbox emits, the vacancy-clearance derivation, the GL post).
 //!
-//! Every write handler extracts the caller's company from the
-//! [`CompanyContext`] the `company_auth` middleware inserts — the tenant
-//! comes from the signed token, never the request body — and passes it down
-//! so each verb runs inside a company-scoped transaction (row-level
-//! security does the actual fencing).
+//! Every write handler extracts the [`OrgContext`] the composing service's
+//! `org_auth` layer inserts — the acting identity comes off the signed
+//! token, never the request body. The module itself is tenant-agnostic
+//! (ADR-0029): it pins no tenant variable and passes no company down. The
+//! database scope is the ambient request scope the host bound; verbs that
+//! must hand a company id to a still-company-keyed seam (the outbox record,
+//! the event payload a company-fenced sibling consumes, the GL envelope)
+//! read it from that scope and fail closed when it is absent.
 
 use std::sync::Arc;
 
@@ -33,7 +36,7 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use backbone_auth::company::CompanyContext;
+use backbone_auth::org::OrgContext;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -90,7 +93,7 @@ struct CreateOnboardingBody {
 
 async fn create_onboarding(
     State(svc): State<Arc<OnboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     b: Option<Json<CreateOnboardingBody>>,
 ) -> axum::response::Response {
     let b = b.map(|Json(b)| b).unwrap_or_default();
@@ -106,7 +109,6 @@ async fn create_onboarding(
     };
     match svc
         .create(
-            tenant.company_id,
             NewOnboarding {
                 employee_id,
                 start_date,
@@ -123,10 +125,10 @@ async fn create_onboarding(
 
 async fn complete_onboarding(
     State(svc): State<Arc<OnboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(onboarding_id): Path<Uuid>,
 ) -> axum::response::Response {
-    match svc.complete(tenant.company_id, onboarding_id).await {
+    match svc.complete(onboarding_id).await {
         Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already completed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
@@ -143,12 +145,12 @@ struct ConfirmBody {
 
 async fn confirm_onboarding(
     State(svc): State<Arc<OnboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(onboarding_id): Path<Uuid>,
     b: Option<Json<ConfirmBody>>,
 ) -> axum::response::Response {
     let force = b.map(|Json(b)| b.force).unwrap_or_default();
-    match svc.confirm(tenant.company_id, onboarding_id, force).await {
+    match svc.confirm(onboarding_id, force).await {
         Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already confirmed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
@@ -188,7 +190,7 @@ struct CreatePromotionBody {
 
 async fn create_promotion(
     State(svc): State<Arc<PromotionWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     b: Option<Json<CreatePromotionBody>>,
 ) -> axum::response::Response {
     let b = b.map(|Json(b)| b).unwrap_or_default();
@@ -204,7 +206,6 @@ async fn create_promotion(
     };
     match svc
         .create(
-            tenant.company_id,
             NewPromotion {
                 employee_id,
                 promotion_type: b.promotion_type,
@@ -236,13 +237,13 @@ struct ApproveBody {
 
 async fn approve_promotion(
     State(svc): State<Arc<PromotionWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(promotion_id): Path<Uuid>,
     b: Option<Json<ApproveBody>>,
 ) -> axum::response::Response {
     let approved_by = b.map(|Json(b)| b.approved_by).unwrap_or_default();
     match svc
-        .approve(tenant.company_id, promotion_id, approved_by)
+        .approve(promotion_id, approved_by)
         .await
     {
         Ok(moved) => (StatusCode::OK, Json(OkResponse { ok: moved })).into_response(),
@@ -252,10 +253,10 @@ async fn approve_promotion(
 
 async fn effect_promotion(
     State(svc): State<Arc<PromotionWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(promotion_id): Path<Uuid>,
 ) -> axum::response::Response {
-    match svc.effect(tenant.company_id, promotion_id).await {
+    match svc.effect(promotion_id).await {
         Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already effective; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
@@ -279,7 +280,7 @@ struct CreateOffboardingBody {
 
 async fn create_offboarding(
     State(svc): State<Arc<OffboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     b: Option<Json<CreateOffboardingBody>>,
 ) -> axum::response::Response {
     let b = b.map(|Json(b)| b).unwrap_or_default();
@@ -296,7 +297,6 @@ async fn create_offboarding(
         };
     match svc
         .create(
-            tenant.company_id,
             NewOffboarding {
                 employee_id,
                 reason: b.reason,
@@ -313,10 +313,10 @@ async fn create_offboarding(
 
 async fn clear_offboarding(
     State(svc): State<Arc<OffboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(offboarding_id): Path<Uuid>,
 ) -> axum::response::Response {
-    match svc.clear(tenant.company_id, offboarding_id).await {
+    match svc.clear(offboarding_id).await {
         Ok(moved) => (StatusCode::OK, Json(OkResponse { ok: moved })).into_response(),
         Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
     }
@@ -324,10 +324,10 @@ async fn clear_offboarding(
 
 async fn close_offboarding(
     State(svc): State<Arc<OffboardingWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(offboarding_id): Path<Uuid>,
 ) -> axum::response::Response {
-    match svc.close(tenant.company_id, offboarding_id).await {
+    match svc.close(offboarding_id).await {
         Ok(Some(event_id)) => (StatusCode::OK, Json(IdResponse { id: event_id })).into_response(),
         // Idempotent no-op: already closed; no second event.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
@@ -359,7 +359,7 @@ struct CreateTaskBody {
 /// build time, which only surfaces when a host actually composes both).
 async fn create_onboarding_task(
     State(svc): State<Arc<OnboardingTaskWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(onboarding_id): Path<Uuid>,
     b: Option<Json<CreateTaskBody>>,
 ) -> axum::response::Response {
@@ -376,7 +376,6 @@ async fn create_onboarding_task(
     };
     match svc
         .create_task(
-            tenant.company_id,
             NewOnboardingTask {
                 onboarding_id,
                 title,
@@ -409,7 +408,7 @@ struct CreateClearanceItemBody {
 /// same reason as the onboarding-task create above.
 async fn create_clearance_item(
     State(svc): State<Arc<ClearanceItemWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(offboarding_id): Path<Uuid>,
     b: Option<Json<CreateClearanceItemBody>>,
 ) -> axum::response::Response {
@@ -426,7 +425,6 @@ async fn create_clearance_item(
     };
     match svc
         .create_clearance_item(
-            tenant.company_id,
             NewClearanceItem {
                 offboarding_id,
                 title,
@@ -450,11 +448,11 @@ struct DraftSettlementBody {
 
 async fn draft_final_settlement(
     State(svc): State<Arc<FinalSettlementWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Json(b): Json<DraftSettlementBody>,
 ) -> axum::response::Response {
     match svc
-        .draft_from_offboarding(tenant.company_id, b.offboarding_id)
+        .draft_from_offboarding(b.offboarding_id)
         .await
     {
         Ok(id) => (StatusCode::CREATED, Json(IdResponse { id })).into_response(),
@@ -464,11 +462,11 @@ async fn draft_final_settlement(
 
 async fn confirm_final_settlement(
     State(svc): State<Arc<FinalSettlementWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Path(settlement_id): Path<Uuid>,
     Json(b): Json<SettlementAccounts>,
 ) -> axum::response::Response {
-    match svc.confirm(tenant.company_id, settlement_id, b).await {
+    match svc.confirm(settlement_id, b).await {
         Ok(Some(ack)) => (StatusCode::OK, Json(ack)).into_response(),
         // Idempotent no-op: already confirmed; no second envelope.
         Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),

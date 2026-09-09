@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.onboardings (
 --     id,
---     company_id,
 --     employee_id,
 --     start_date,
 --     status,

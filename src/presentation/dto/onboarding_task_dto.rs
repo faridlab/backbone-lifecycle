@@ -35,9 +35,6 @@ use crate::domain::entity::TaskStatus;
 #[serde(rename_all = "camelCase")]
 pub struct CreateOnboardingTaskDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "onboarding_id")]
     pub onboarding_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -64,9 +61,6 @@ pub struct CreateOnboardingTaskDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOnboardingTaskDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "onboarding_id")]
     pub onboarding_id: Uuid,
@@ -95,9 +89,6 @@ pub struct UpdateOnboardingTaskDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchOnboardingTaskDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "onboarding_id")]
     pub onboarding_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -116,7 +107,7 @@ pub struct PatchOnboardingTaskDto {
 impl PatchOnboardingTaskDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.onboarding_id.is_some() || self.title.is_some() || self.category.is_some() || self.owner_employee_id.is_some() || self.due_date.is_some() || self.status.is_some()
+        self.onboarding_id.is_some() || self.title.is_some() || self.category.is_some() || self.owner_employee_id.is_some() || self.due_date.is_some() || self.status.is_some()
     }
 }
 
@@ -134,8 +125,6 @@ impl PatchOnboardingTaskDto {
 pub struct OnboardingTaskResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub onboarding_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
@@ -201,9 +190,9 @@ impl OnboardingTaskListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct OnboardingTaskSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub onboarding_id: Uuid,
     pub title: String,
+    pub category: Option<TaskCategory>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -215,7 +204,6 @@ impl From<OnboardingTask> for OnboardingTaskResponseDto {
     fn from(entity: OnboardingTask) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             onboarding_id: entity.onboarding_id,
             title: entity.title,
             category: entity.category,
@@ -232,9 +220,9 @@ impl From<OnboardingTask> for OnboardingTaskSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             onboarding_id: entity.onboarding_id,
             title: entity.title,
+            category: entity.category,
             created_at,
         }
     }
@@ -244,7 +232,6 @@ impl From<CreateOnboardingTaskDto> for OnboardingTask {
     fn from(dto: CreateOnboardingTaskDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             onboarding_id: dto.onboarding_id,
             title: dto.title,
             category: dto.category,
@@ -260,7 +247,6 @@ impl From<&OnboardingTask> for OnboardingTaskResponseDto {
     fn from(entity: &OnboardingTask) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             onboarding_id: entity.onboarding_id.clone(),
             title: entity.title.clone(),
             category: entity.category.clone(),
@@ -280,7 +266,6 @@ impl backbone_core::FromCreateDto<CreateOnboardingTaskDto> for OnboardingTask {
 
 impl backbone_core::ApplyUpdateDto<UpdateOnboardingTaskDto> for OnboardingTask {
     fn apply_update(mut self, dto: UpdateOnboardingTaskDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.onboarding_id = dto.onboarding_id;
         self.title = dto.title;
         self.category = dto.category;
@@ -299,4 +284,3 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTaskDto> for OnboardingTask {
 // Add custom DTOs specific to OnboardingTask here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

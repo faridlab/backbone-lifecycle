@@ -36,9 +36,6 @@ use crate::domain::entity::PromotionType;
 #[serde(rename_all = "camelCase")]
 pub struct CreatePromotionDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[serde(alias = "promotion_type")]
@@ -84,9 +81,6 @@ pub struct CreatePromotionDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePromotionDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -134,9 +128,6 @@ pub struct UpdatePromotionDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchPromotionDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "promotion_type")]
@@ -173,7 +164,7 @@ pub struct PatchPromotionDto {
 impl PatchPromotionDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.proposed_salary.is_some() || self.effective_date.is_some() || self.status.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.reason.is_some()
+        self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.proposed_salary.is_some() || self.effective_date.is_some() || self.status.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.reason.is_some()
     }
 }
 
@@ -191,8 +182,6 @@ impl PatchPromotionDto {
 pub struct PromotionResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     pub promotion_type: PromotionType,
@@ -267,9 +256,9 @@ impl PromotionListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct PromotionSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub promotion_type: PromotionType,
+    pub position_id_from: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -281,7 +270,6 @@ impl From<Promotion> for PromotionResponseDto {
     fn from(entity: Promotion) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             promotion_type: entity.promotion_type,
             position_id_from: entity.position_id_from,
@@ -307,9 +295,9 @@ impl From<Promotion> for PromotionSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             promotion_type: entity.promotion_type,
+            position_id_from: entity.position_id_from,
             created_at,
         }
     }
@@ -319,7 +307,6 @@ impl From<CreatePromotionDto> for Promotion {
     fn from(dto: CreatePromotionDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             promotion_type: dto.promotion_type,
             position_id_from: dto.position_id_from,
@@ -344,7 +331,6 @@ impl From<&Promotion> for PromotionResponseDto {
     fn from(entity: &Promotion) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             promotion_type: entity.promotion_type.clone(),
             position_id_from: entity.position_id_from.clone(),
@@ -373,7 +359,6 @@ impl backbone_core::FromCreateDto<CreatePromotionDto> for Promotion {
 
 impl backbone_core::ApplyUpdateDto<UpdatePromotionDto> for Promotion {
     fn apply_update(mut self, dto: UpdatePromotionDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.promotion_type = dto.promotion_type;
         self.position_id_from = dto.position_id_from;
@@ -401,4 +386,3 @@ impl backbone_core::ApplyUpdateDto<UpdatePromotionDto> for Promotion {
 // Add custom DTOs specific to Promotion here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

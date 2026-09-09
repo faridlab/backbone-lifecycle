@@ -48,7 +48,6 @@ impl std::ops::Deref for ExitInterviewId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ExitInterview {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub offboarding_id: Option<Uuid>,
     pub conducted_by: Option<Uuid>,
@@ -66,10 +65,9 @@ impl ExitInterview {
     }
 
     /// Create a new ExitInterview with required fields
-    pub fn new(company_id: Uuid, employee_id: Uuid, responses: serde_json::Value) -> Self {
+    pub fn new(employee_id: Uuid, responses: serde_json::Value) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             employee_id,
             offboarding_id: None,
             conducted_by: None,
@@ -160,9 +158,6 @@ impl ExitInterview {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "employee_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.employee_id = v; }
                 }
@@ -232,16 +227,12 @@ impl backbone_orm::EntityRepoMeta for ExitInterview {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("offboarding_id".to_string(), "uuid".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
         &[]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -251,7 +242,6 @@ impl backbone_orm::EntityRepoMeta for ExitInterview {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct ExitInterviewBuilder {
-    company_id: Option<Uuid>,
     employee_id: Option<Uuid>,
     offboarding_id: Option<Uuid>,
     conducted_by: Option<Uuid>,
@@ -260,12 +250,6 @@ pub struct ExitInterviewBuilder {
 }
 
 impl ExitInterviewBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the employee_id field (required)
     pub fn employee_id(mut self, value: Uuid) -> Self {
         self.employee_id = Some(value);
@@ -300,13 +284,11 @@ impl ExitInterviewBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<ExitInterview, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let employee_id = self.employee_id.ok_or_else(|| "employee_id is required".to_string())?;
         let responses = self.responses.ok_or_else(|| "responses is required".to_string())?;
 
         Ok(ExitInterview {
             id: Uuid::new_v4(),
-            company_id,
             employee_id,
             offboarding_id: self.offboarding_id,
             conducted_by: self.conducted_by,

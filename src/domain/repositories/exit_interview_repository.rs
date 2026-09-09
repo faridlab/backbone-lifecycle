@@ -44,7 +44,6 @@ pub struct ExitInterviewPaginatedResult {
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
 pub struct ExitInterviewFilter {
-    pub company_id: Option<Uuid>,
     pub employee_id: Option<Uuid>,
     pub offboarding_id: Option<Uuid>,
     pub conducted_by: Option<Uuid>,
@@ -54,7 +53,7 @@ pub struct ExitInterviewFilter {
 impl ExitInterviewFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.offboarding_id.is_some() || self.conducted_by.is_some() || self.would_recommend.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.conducted_by.is_some() || self.would_recommend.is_some()
     }
 }
 

@@ -6,7 +6,6 @@
 
 -- INSERT INTO lifecycle.final_settlements (
 --     id,
---     company_id,
 --     employee_id,
 --     offboarding_id,
 --     period,

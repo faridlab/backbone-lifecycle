@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -17,24 +17,24 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["postgres"] }
-backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
+backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19", features = ["postgres"] }
+backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19" }
 # The axum feature: guarded-route handlers extract `OrgContext` (the acting org node off the
 # signed token) as an axum extractor — the org_auth surface the composing service mounts.
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["axum"] }
-backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19", features = ["axum"] }
+backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19" }
 # Transactional-outbox producer (ADR-005): stages `promotion.effective` / `onboarding.completed` /
 # `offboarding.closed` in the same tx as the lifecycle state change. v2.7.4 is where backbone-outbox
 # 0.2.0 (with the company-RLS fence) ships; the HR composer's [patch] block unifies it onto local
 # HEAD for dev. No features needed on the producer side — `runner`/`multi_tenant` are the relay's
 # concern (backbone-hr-app).
-backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
+backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19" }
 # GL-posting port (the single seam producers reach accounting through): the final-settlement
 # confirm verb builds its balanced envelope with these types and pushes it through a
 # `GlPostSink` the host app wires at composition time. v2.7.7 is where the envelope carried
 # the party-tagged lines the settlement needs. Lifecycle never depends on backbone-accounting
 # itself — the port crate is the whole contract.
-backbone-gl-posting = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
+backbone-gl-posting = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.19" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }

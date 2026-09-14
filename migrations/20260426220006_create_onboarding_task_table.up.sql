@@ -11,10 +11,18 @@ END
 $$;
 
 -- Create task_status enum type
+-- `task_status` is NOT a shared vocabulary. This module's task states and the
+-- ones another module happens to give the same name are different concepts with
+-- disjoint values, so the type is qualified to this module's own schema. An
+-- unqualified CREATE TYPE lands in whichever schema the search_path names and
+-- the guard below matched the name in ANY schema, so whichever module migrated
+-- first won globally and the other's columns failed on a value the type it
+-- found does not have.
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_status') THEN
-        CREATE TYPE task_status AS ENUM ('pending', 'done', 'skipped', 'blocked');
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+                   WHERE t.typname = 'task_status' AND n.nspname = 'lifecycle') THEN
+        CREATE TYPE lifecycle.task_status AS ENUM ('pending', 'done', 'skipped', 'blocked');
     END IF;
 END
 $$;
@@ -29,7 +37,7 @@ CREATE TABLE IF NOT EXISTS lifecycle.onboarding_tasks (
     category task_category,
     owner_employee_id UUID,
     due_date DATE,
-    status task_status NOT NULL DEFAULT 'pending',
+    status lifecycle.task_status NOT NULL DEFAULT 'pending',
     metadata JSONB NOT NULL DEFAULT '{"created_at":null,"updated_at":null,"deleted_at":null,"created_by":null,"updated_by":null,"deleted_by":null}'::jsonb,
     PRIMARY KEY (id)
 );

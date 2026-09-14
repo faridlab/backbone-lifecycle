@@ -27,9 +27,10 @@ use uuid::Uuid;
 
 /// The three cross-module inputs the pesangon calc consumes at offboarding close.
 ///
-/// Every method takes the caller's `company` and reads inside a company-scoped
-/// session — the source tables carry their own row-level security fences, so an
-/// unbound read returns zero rows regardless of the WHERE clause.
+/// Every method takes the caller's `company` and reads inside an organization
+/// request scope keyed on that company's unit — the source tables carry their own
+/// row-level security fences, so an unbound read returns zero rows regardless of
+/// the WHERE clause.
 ///
 /// Each method is fallible at the DB layer. The producer interprets `None` from
 /// [`Self::join_date`] / [`Self::current_monthly_salary`] as a missing-prerequisite hard error
@@ -55,8 +56,8 @@ pub trait OffboardingInputs: Send + Sync {
 }
 
 /// Default pool-backed [`OffboardingInputs`] — scalar SQL reads against the employee / payroll /
-/// timeoff tables, each wrapped in a company-scoped session. Constructed from the shared pool the
-/// composer/test already holds.
+/// timeoff tables, each wrapped in an organization request scope. Constructed from the shared pool
+/// the composer/test already holds.
 pub struct PoolOffboardingInputs {
     pool: PgPool,
 }
@@ -68,6 +69,50 @@ impl PoolOffboardingInputs {
     }
 }
 
+impl PoolOffboardingInputs {
+    /// Run one scalar read under an organization request scope.
+    ///
+    /// The three source tables were re-keyed onto the organization unit axis, so the reads fence on
+    /// `org_unit_id` against the session's entitlement union rather than naming a company. The scope
+    /// rides a request-dedicated connection: a fenced read must never borrow an outer transaction's
+    /// connection, or it answers under whatever scope that one carries.
+    ///
+    /// The caller still names a company. When an ambient scope is already open the read joins it —
+    /// the composing service has already resolved the session's entitlements, and a named company
+    /// must never widen them. Otherwise the company's own unit is the scope, which is what a direct
+    /// call (a test, a job) means.
+    async fn scoped_scalar<T>(
+        &self,
+        company: Uuid,
+        query: sqlx::query::QueryScalar<
+            '_,
+            sqlx::Postgres,
+            T,
+            sqlx::postgres::PgArguments,
+        >,
+    ) -> Result<Option<T>, sqlx::Error>
+    where
+        T: Send + Unpin + for<'r> sqlx::Decode<'r, sqlx::Postgres> + sqlx::Type<sqlx::Postgres>,
+    {
+        use backbone_orm::org_scope::{self, OrgScope};
+
+        let scope = org_scope::current_org_scope()
+            .unwrap_or_else(|| OrgScope::for_company_unit(company));
+        let mut tx = self.pool.begin().await?;
+        org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+        let out = query.fetch_optional(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(out)
+    }
+
+    /// The organization units a read may answer under — the scope's entitlement union.
+    fn scope_units(company: Uuid) -> Vec<Uuid> {
+        backbone_orm::org_scope::current_org_scope()
+            .map(|s| s.scope_unit_ids().to_vec())
+            .unwrap_or_else(|| vec![company])
+    }
+}
+
 #[async_trait]
 impl OffboardingInputs for PoolOffboardingInputs {
     async fn join_date(
@@ -75,26 +120,20 @@ impl OffboardingInputs for PoolOffboardingInputs {
         company: Uuid,
         employee_id: Uuid,
     ) -> Result<Option<NaiveDate>, sqlx::Error> {
-        // The scoped helpers read the company off the task-local, bind it onto a
-        // short-lived tx, and run the statement there — the read is fenced by the
-        // same RLS policy as every other company-scoped statement.
-        backbone_orm::company_scope::with_company_scope(Some(company), async {
-            backbone_orm::company_scope::fetch_optional_scalar_scoped(
-                &self.pool,
-                sqlx::query_scalar(
-                    r#"SELECT join_date
-                         FROM employee.employments
-                        WHERE employee_id = $1
-                          AND company_id = $2
-                          AND (metadata->>'deleted_at') IS NULL
-                        ORDER BY join_date ASC
-                        LIMIT 1"#,
-                )
-                .bind(employee_id)
-                .bind(company),
+        self.scoped_scalar(
+            company,
+            sqlx::query_scalar(
+                r#"SELECT join_date
+                     FROM employee.employments
+                    WHERE employee_id = $1
+                      AND org_unit_id = ANY($2)
+                      AND (metadata->>'deleted_at') IS NULL
+                    ORDER BY join_date ASC
+                    LIMIT 1"#,
             )
-            .await
-        })
+            .bind(employee_id)
+            .bind(Self::scope_units(company)),
+        )
         .await
     }
 
@@ -103,25 +142,22 @@ impl OffboardingInputs for PoolOffboardingInputs {
         company: Uuid,
         employee_id: Uuid,
     ) -> Result<Option<Decimal>, sqlx::Error> {
-        backbone_orm::company_scope::with_company_scope(Some(company), async {
-            backbone_orm::company_scope::fetch_optional_scalar_scoped(
-                &self.pool,
-                sqlx::query_scalar(
-                    r#"SELECT new_amount
-                         FROM payroll.compensation_changes
-                        WHERE employee_id = $1
-                          AND company_id = $2
-                          AND new_amount IS NOT NULL
-                          AND (metadata->>'deleted_at') IS NULL
-                        ORDER BY effective_date DESC NULLS LAST,
-                                 (metadata->>'created_at') DESC NULLS LAST
-                        LIMIT 1"#,
-                )
-                .bind(employee_id)
-                .bind(company),
+        self.scoped_scalar(
+            company,
+            sqlx::query_scalar(
+                r#"SELECT new_amount
+                     FROM payroll.compensation_changes
+                    WHERE employee_id = $1
+                      AND org_unit_id = ANY($2)
+                      AND new_amount IS NOT NULL
+                      AND (metadata->>'deleted_at') IS NULL
+                    ORDER BY effective_date DESC NULLS LAST,
+                             (metadata->>'created_at') DESC NULLS LAST
+                    LIMIT 1"#,
             )
-            .await
-        })
+            .bind(employee_id)
+            .bind(Self::scope_units(company)),
+        )
         .await
     }
 
@@ -130,23 +166,20 @@ impl OffboardingInputs for PoolOffboardingInputs {
         company: Uuid,
         employee_id: Uuid,
     ) -> Result<Decimal, sqlx::Error> {
-        backbone_orm::company_scope::with_company_scope(Some(company), async {
-            // COALESCE turns "no balance rows" into 0 (no leave to pay out) rather than NULL.
-            backbone_orm::company_scope::fetch_optional_scalar_scoped(
-                &self.pool,
-                sqlx::query_scalar(
-                    r#"SELECT COALESCE(SUM(allocated - used), 0)
-                         FROM timeoff.timeoff_balances
-                        WHERE employee_id = $1
-                          AND company_id = $2
-                          AND (metadata->>'deleted_at') IS NULL"#,
-                )
-                .bind(employee_id)
-                .bind(company),
+        // COALESCE turns "no balance rows" into 0 (no leave to pay out) rather than NULL.
+        self.scoped_scalar(
+            company,
+            sqlx::query_scalar(
+                r#"SELECT COALESCE(SUM(allocated - used), 0)
+                     FROM timeoff.timeoff_balances
+                    WHERE employee_id = $1
+                      AND org_unit_id = ANY($2)
+                      AND (metadata->>'deleted_at') IS NULL"#,
             )
-            .await
-            .map(|d| d.unwrap_or(Decimal::ZERO))
-        })
+            .bind(employee_id)
+            .bind(Self::scope_units(company)),
+        )
         .await
+        .map(|d| d.unwrap_or(Decimal::ZERO))
     }
 }

@@ -7,7 +7,7 @@ info:
     This API provides 11 standard CRUD endpoints for each model.
 
 servers:
-  - url: http://localhost:3000
+  - url: /
     description: Development server
 
 tags:
@@ -27,7 +27,7 @@ tags:
     description: Promotion management endpoints
 
 paths:
-  /api/v1/clearance_items:
+  /api/v1/lifecycle/clearance_items:
     get:
       tags:
         - ClearanceItems
@@ -73,7 +73,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/clearance_items/{id}:
+  /api/v1/lifecycle/clearance_items/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -145,7 +145,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/clearance_items/bulk:
+  /api/v1/lifecycle/clearance_items/bulk:
     post:
       tags:
         - ClearanceItems
@@ -237,7 +237,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/clearance_items/upsert:
+  /api/v1/lifecycle/clearance_items/upsert:
     post:
       tags:
         - ClearanceItems
@@ -267,7 +267,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClearanceItem'
 
-  /api/v1/clearance_items/trash:
+  /api/v1/lifecycle/clearance_items/trash:
     get:
       tags:
         - ClearanceItems
@@ -284,7 +284,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClearanceItemList'
 
-  /api/v1/clearance_items/{id}/restore:
+  /api/v1/lifecycle/clearance_items/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -302,7 +302,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/clearance_items/empty:
+  /api/v1/lifecycle/clearance_items/empty:
     delete:
       tags:
         - ClearanceItems
@@ -319,7 +319,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/clearance_items/delete/bulk:
+  /api/v1/lifecycle/clearance_items/delete/bulk:
     post:
       tags:
         - ClearanceItems
@@ -339,7 +339,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/clearance_items/restore/bulk:
+  /api/v1/lifecycle/clearance_items/restore/bulk:
     post:
       tags:
         - ClearanceItems
@@ -357,7 +357,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/clearance_items/restore/all:
+  /api/v1/lifecycle/clearance_items/restore/all:
     post:
       tags:
         - ClearanceItems
@@ -373,7 +373,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/clearance_items/trash/bulk:
+  /api/v1/lifecycle/clearance_items/trash/bulk:
     delete:
       tags:
         - ClearanceItems
@@ -393,7 +393,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/exit_interviews:
+  /api/v1/lifecycle/exit_interviews:
     get:
       tags:
         - ExitInterviews
@@ -439,7 +439,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/exit_interviews/{id}:
+  /api/v1/lifecycle/exit_interviews/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -511,7 +511,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/exit_interviews/bulk:
+  /api/v1/lifecycle/exit_interviews/bulk:
     post:
       tags:
         - ExitInterviews
@@ -603,7 +603,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/exit_interviews/upsert:
+  /api/v1/lifecycle/exit_interviews/upsert:
     post:
       tags:
         - ExitInterviews
@@ -633,7 +633,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExitInterview'
 
-  /api/v1/exit_interviews/trash:
+  /api/v1/lifecycle/exit_interviews/trash:
     get:
       tags:
         - ExitInterviews
@@ -650,7 +650,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExitInterviewList'
 
-  /api/v1/exit_interviews/{id}/restore:
+  /api/v1/lifecycle/exit_interviews/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -668,7 +668,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/exit_interviews/empty:
+  /api/v1/lifecycle/exit_interviews/empty:
     delete:
       tags:
         - ExitInterviews
@@ -685,7 +685,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/exit_interviews/delete/bulk:
+  /api/v1/lifecycle/exit_interviews/delete/bulk:
     post:
       tags:
         - ExitInterviews
@@ -705,7 +705,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/exit_interviews/restore/bulk:
+  /api/v1/lifecycle/exit_interviews/restore/bulk:
     post:
       tags:
         - ExitInterviews
@@ -723,7 +723,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/exit_interviews/restore/all:
+  /api/v1/lifecycle/exit_interviews/restore/all:
     post:
       tags:
         - ExitInterviews
@@ -739,7 +739,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/exit_interviews/trash/bulk:
+  /api/v1/lifecycle/exit_interviews/trash/bulk:
     delete:
       tags:
         - ExitInterviews
@@ -759,7 +759,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/final_settlements:
+  /api/v1/lifecycle/final_settlements:
     get:
       tags:
         - FinalSettlements
@@ -805,7 +805,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/final_settlements/{id}:
+  /api/v1/lifecycle/final_settlements/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -877,7 +877,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/final_settlements/bulk:
+  /api/v1/lifecycle/final_settlements/bulk:
     post:
       tags:
         - FinalSettlements
@@ -969,7 +969,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/final_settlements/upsert:
+  /api/v1/lifecycle/final_settlements/upsert:
     post:
       tags:
         - FinalSettlements
@@ -999,7 +999,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/FinalSettlement'
 
-  /api/v1/final_settlements/trash:
+  /api/v1/lifecycle/final_settlements/trash:
     get:
       tags:
         - FinalSettlements
@@ -1016,7 +1016,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/FinalSettlementList'
 
-  /api/v1/final_settlements/{id}/restore:
+  /api/v1/lifecycle/final_settlements/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1034,7 +1034,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/final_settlements/empty:
+  /api/v1/lifecycle/final_settlements/empty:
     delete:
       tags:
         - FinalSettlements
@@ -1051,7 +1051,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/final_settlements/delete/bulk:
+  /api/v1/lifecycle/final_settlements/delete/bulk:
     post:
       tags:
         - FinalSettlements
@@ -1071,7 +1071,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/final_settlements/restore/bulk:
+  /api/v1/lifecycle/final_settlements/restore/bulk:
     post:
       tags:
         - FinalSettlements
@@ -1089,7 +1089,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/final_settlements/restore/all:
+  /api/v1/lifecycle/final_settlements/restore/all:
     post:
       tags:
         - FinalSettlements
@@ -1105,7 +1105,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/final_settlements/trash/bulk:
+  /api/v1/lifecycle/final_settlements/trash/bulk:
     delete:
       tags:
         - FinalSettlements
@@ -1125,7 +1125,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/offboardings:
+  /api/v1/lifecycle/offboardings:
     get:
       tags:
         - Offboardings
@@ -1171,7 +1171,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/offboardings/{id}:
+  /api/v1/lifecycle/offboardings/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1243,7 +1243,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/offboardings/bulk:
+  /api/v1/lifecycle/offboardings/bulk:
     post:
       tags:
         - Offboardings
@@ -1335,7 +1335,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/offboardings/upsert:
+  /api/v1/lifecycle/offboardings/upsert:
     post:
       tags:
         - Offboardings
@@ -1365,7 +1365,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offboarding'
 
-  /api/v1/offboardings/trash:
+  /api/v1/lifecycle/offboardings/trash:
     get:
       tags:
         - Offboardings
@@ -1382,7 +1382,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OffboardingList'
 
-  /api/v1/offboardings/{id}/restore:
+  /api/v1/lifecycle/offboardings/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1400,7 +1400,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/offboardings/empty:
+  /api/v1/lifecycle/offboardings/empty:
     delete:
       tags:
         - Offboardings
@@ -1417,7 +1417,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/offboardings/delete/bulk:
+  /api/v1/lifecycle/offboardings/delete/bulk:
     post:
       tags:
         - Offboardings
@@ -1437,7 +1437,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/offboardings/restore/bulk:
+  /api/v1/lifecycle/offboardings/restore/bulk:
     post:
       tags:
         - Offboardings
@@ -1455,7 +1455,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/offboardings/restore/all:
+  /api/v1/lifecycle/offboardings/restore/all:
     post:
       tags:
         - Offboardings
@@ -1471,7 +1471,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/offboardings/trash/bulk:
+  /api/v1/lifecycle/offboardings/trash/bulk:
     delete:
       tags:
         - Offboardings
@@ -1491,7 +1491,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboardings:
+  /api/v1/lifecycle/onboardings:
     get:
       tags:
         - Onboardings
@@ -1537,7 +1537,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/onboardings/{id}:
+  /api/v1/lifecycle/onboardings/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1609,7 +1609,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/onboardings/bulk:
+  /api/v1/lifecycle/onboardings/bulk:
     post:
       tags:
         - Onboardings
@@ -1701,7 +1701,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboardings/upsert:
+  /api/v1/lifecycle/onboardings/upsert:
     post:
       tags:
         - Onboardings
@@ -1731,7 +1731,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Onboarding'
 
-  /api/v1/onboardings/trash:
+  /api/v1/lifecycle/onboardings/trash:
     get:
       tags:
         - Onboardings
@@ -1748,7 +1748,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingList'
 
-  /api/v1/onboardings/{id}/restore:
+  /api/v1/lifecycle/onboardings/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1766,7 +1766,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/onboardings/empty:
+  /api/v1/lifecycle/onboardings/empty:
     delete:
       tags:
         - Onboardings
@@ -1783,7 +1783,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/onboardings/delete/bulk:
+  /api/v1/lifecycle/onboardings/delete/bulk:
     post:
       tags:
         - Onboardings
@@ -1803,7 +1803,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboardings/restore/bulk:
+  /api/v1/lifecycle/onboardings/restore/bulk:
     post:
       tags:
         - Onboardings
@@ -1821,7 +1821,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboardings/restore/all:
+  /api/v1/lifecycle/onboardings/restore/all:
     post:
       tags:
         - Onboardings
@@ -1837,7 +1837,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/onboardings/trash/bulk:
+  /api/v1/lifecycle/onboardings/trash/bulk:
     delete:
       tags:
         - Onboardings
@@ -1857,7 +1857,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboarding_tasks:
+  /api/v1/lifecycle/onboarding_tasks:
     get:
       tags:
         - OnboardingTasks
@@ -1903,7 +1903,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/onboarding_tasks/{id}:
+  /api/v1/lifecycle/onboarding_tasks/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1975,7 +1975,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/onboarding_tasks/bulk:
+  /api/v1/lifecycle/onboarding_tasks/bulk:
     post:
       tags:
         - OnboardingTasks
@@ -2067,7 +2067,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboarding_tasks/upsert:
+  /api/v1/lifecycle/onboarding_tasks/upsert:
     post:
       tags:
         - OnboardingTasks
@@ -2097,7 +2097,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingTask'
 
-  /api/v1/onboarding_tasks/trash:
+  /api/v1/lifecycle/onboarding_tasks/trash:
     get:
       tags:
         - OnboardingTasks
@@ -2114,7 +2114,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingTaskList'
 
-  /api/v1/onboarding_tasks/{id}/restore:
+  /api/v1/lifecycle/onboarding_tasks/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2132,7 +2132,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/onboarding_tasks/empty:
+  /api/v1/lifecycle/onboarding_tasks/empty:
     delete:
       tags:
         - OnboardingTasks
@@ -2149,7 +2149,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/onboarding_tasks/delete/bulk:
+  /api/v1/lifecycle/onboarding_tasks/delete/bulk:
     post:
       tags:
         - OnboardingTasks
@@ -2169,7 +2169,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboarding_tasks/restore/bulk:
+  /api/v1/lifecycle/onboarding_tasks/restore/bulk:
     post:
       tags:
         - OnboardingTasks
@@ -2187,7 +2187,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/onboarding_tasks/restore/all:
+  /api/v1/lifecycle/onboarding_tasks/restore/all:
     post:
       tags:
         - OnboardingTasks
@@ -2203,7 +2203,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/onboarding_tasks/trash/bulk:
+  /api/v1/lifecycle/onboarding_tasks/trash/bulk:
     delete:
       tags:
         - OnboardingTasks
@@ -2223,7 +2223,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/promotions:
+  /api/v1/lifecycle/promotions:
     get:
       tags:
         - Promotions
@@ -2269,7 +2269,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/promotions/{id}:
+  /api/v1/lifecycle/promotions/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -2341,7 +2341,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/promotions/bulk:
+  /api/v1/lifecycle/promotions/bulk:
     post:
       tags:
         - Promotions
@@ -2433,7 +2433,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/promotions/upsert:
+  /api/v1/lifecycle/promotions/upsert:
     post:
       tags:
         - Promotions
@@ -2463,7 +2463,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Promotion'
 
-  /api/v1/promotions/trash:
+  /api/v1/lifecycle/promotions/trash:
     get:
       tags:
         - Promotions
@@ -2480,7 +2480,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PromotionList'
 
-  /api/v1/promotions/{id}/restore:
+  /api/v1/lifecycle/promotions/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2498,7 +2498,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/promotions/empty:
+  /api/v1/lifecycle/promotions/empty:
     delete:
       tags:
         - Promotions
@@ -2515,7 +2515,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/promotions/delete/bulk:
+  /api/v1/lifecycle/promotions/delete/bulk:
     post:
       tags:
         - Promotions
@@ -2535,7 +2535,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/promotions/restore/bulk:
+  /api/v1/lifecycle/promotions/restore/bulk:
     post:
       tags:
         - Promotions
@@ -2553,7 +2553,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/promotions/restore/all:
+  /api/v1/lifecycle/promotions/restore/all:
     post:
       tags:
         - Promotions
@@ -2569,7 +2569,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/promotions/trash/bulk:
+  /api/v1/lifecycle/promotions/trash/bulk:
     delete:
       tags:
         - Promotions

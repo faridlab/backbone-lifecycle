@@ -39,6 +39,9 @@ pub enum PromotionEffectError {
     /// No `Promotion` exists for the given id.
     #[error("promotion {0} not found")]
     NotFound(Uuid),
+    /// The engine-gated lane refuses (verdict not granted, link unreadable).
+    #[error("{0}")]
+    InvalidState(&'static str),
     /// The promotion exists but is not `approved` (only an approved promotion may be effected; an
     /// already-`effective` one is a no-op, anything else is a domain violation).
     #[error("promotion {promotion_id} is not approved (status: {status})")]
@@ -74,6 +77,7 @@ impl PromotionEffectError {
     pub fn code(&self) -> &'static str {
         match self {
             PromotionEffectError::NotFound(_) => "promotion_not_found",
+            PromotionEffectError::InvalidState(_) => "promotion_gate_refused",
             PromotionEffectError::NotApproved { .. } => "promotion_not_approved",
             PromotionEffectError::NotYetEffective { .. } => "promotion_not_yet_effective",
             PromotionEffectError::NotPending { .. } => "promotion_not_pending",
@@ -87,7 +91,8 @@ impl PromotionEffectError {
             PromotionEffectError::NotFound(_) => 404,
             PromotionEffectError::NotApproved { .. }
             | PromotionEffectError::NotYetEffective { .. }
-            | PromotionEffectError::NotPending { .. } => 422,
+            | PromotionEffectError::NotPending { .. }
+            | PromotionEffectError::InvalidState(_) => 422,
             PromotionEffectError::NoCompanyScope
             | PromotionEffectError::Db(_)
             | PromotionEffectError::Outbox(_) => 500,
@@ -121,12 +126,27 @@ pub struct NewPromotion {
 /// effect (the role + salary handoff).
 pub struct PromotionWriteService {
     pool: PgPool,
+    approvals:
+        std::sync::RwLock<std::sync::Arc<dyn super::promotion_approvals_port::PromotionFilingPort>>,
 }
 
 impl PromotionWriteService {
     /// Create a new write-service bound to the given pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            approvals: std::sync::RwLock::new(std::sync::Arc::new(
+                super::promotion_approvals_port::UnwiredPromotionApprovals,
+            )),
+        }
+    }
+
+    /// Wire the approvals port (the composing service's adapter).
+    pub fn set_approvals(
+        &self,
+        port: std::sync::Arc<dyn super::promotion_approvals_port::PromotionFilingPort>,
+    ) {
+        *self.approvals.write().expect("promotion approvals lock poisoned") = port;
     }
 
     /// The company id for the seams that still key on one (the outbox record, the event
@@ -154,6 +174,12 @@ impl PromotionWriteService {
         }
 
         let id = Uuid::new_v4();
+        // Captured before the INSERT binds move the fields — the filing
+        // reuses the same values.
+        let file_type = input
+            .promotion_type
+            .clone()
+            .unwrap_or_else(|| "promotion".into());
         sqlx::query(
             r#"INSERT INTO lifecycle.promotions
                    (id, employee_id, promotion_type,
@@ -184,6 +210,46 @@ impl PromotionWriteService {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
+
+        // File into the engine when wired (outside the tx — the port is a
+        // network hop). An unwired deployment keeps the bespoke approve.
+        let approval_request_id = {
+            let port = self
+                .approvals
+                .read()
+                .expect("promotion approvals lock poisoned")
+                .clone();
+            match port
+                .file(&super::promotion_approvals_port::PromotionFiling {
+                    promotion_id: id,
+                    employee_id: input.employee_id,
+                    promotion_type: file_type,
+                    effective_date: input.effective_date,
+                    position_id_to: input.position_id_to,
+                    level_id_to: input.level_id_to,
+                    department_id_to: input.department_id_to,
+                })
+                .await
+            {
+                Ok(request_id) => Some(request_id),
+                Err(super::promotion_approvals_port::PromotionSeamError::Unwired) => None,
+                Err(e) => return Err(PromotionEffectError::Db(sqlx::Error::Protocol(e.to_string()))),
+            }
+        };
+        if let Some(request_id) = approval_request_id {
+            let mut tx = self.pool.begin().await?;
+            if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+                backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+            }
+            sqlx::query(
+                "UPDATE lifecycle.promotions SET approval_request_id = $2 WHERE id = $1",
+            )
+            .bind(id)
+            .bind(request_id)
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+        }
         Ok(id)
     }
 
@@ -226,6 +292,39 @@ impl PromotionWriteService {
             }
         };
         let status: String = row.try_get("status")?;
+
+        // The engine-gated lane (TR2): a promotion linked into the approvals
+        // engine is approved ONLY by the engine. The verdict is read
+        // through the port BEFORE the flip; unwired/unknown fail closed.
+        let linked: Option<uuid::Uuid> = sqlx::query_scalar(
+            "SELECT approval_request_id FROM lifecycle.promotions WHERE id = $1",
+        )
+        .bind(promotion_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .flatten();
+        if let Some(request_id) = linked {
+            let port = self
+                .approvals
+                .read()
+                .expect("promotion approvals lock poisoned")
+                .clone();
+            match port.status(request_id).await {
+                Ok(super::promotion_approvals_port::PromotionVerdict::Approved) => {}
+                Ok(_) => {
+                    tx.rollback().await?;
+                    return Err(PromotionEffectError::InvalidState(
+                        "the promotion's approval has not been granted by the engine",
+                    ));
+                }
+                Err(_) => {
+                    tx.rollback().await?;
+                    return Err(PromotionEffectError::InvalidState(
+                        "the promotion's approval link could not be read",
+                    ));
+                }
+            }
+        }
 
         if status == "approved" {
             tx.rollback().await?;

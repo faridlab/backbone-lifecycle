@@ -79,6 +79,11 @@ models:
         attributes: ["@required", "@default(draft)"]
         description: "Workflow status"
 
+      approval_request_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The approvals-engine request vouching for this promotion (the engine-gated lane); NULL = the bespoke approve verb"
+
       requested_by:
         type: uuid?
         attributes: ["@exclude_from_foreign_key_check"]

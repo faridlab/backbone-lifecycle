@@ -23,6 +23,7 @@ pub mod pesangon;
 // with its state change (approved→effective / in_progress→completed / cleared→closed). User-owned
 // custom files — never regenerated.
 pub mod promotion_write_service;
+pub mod promotion_approvals_port;
 pub mod onboarding_write_service;
 pub mod offboarding_write_service;
 // The cross-module read ports the offboarding producer needs to compute the 🇮🇩 pesangon at close

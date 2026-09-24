@@ -47,8 +47,8 @@ models:
 
       template_id:
         type: uuid?
-        attributes: ["@exclude_from_foreign_key_check"]
-        description: "Onboarding template used # logical FK (external template catalog)"
+        attributes: ["@foreign_key(OnboardingTemplate.id)"]
+        description: "Onboarding template used # FK lifecycle.onboarding_templates.id (in-module)"
 
       metadata:
         type: Metadata

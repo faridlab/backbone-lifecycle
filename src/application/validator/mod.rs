@@ -11,6 +11,8 @@ pub mod final_settlement_validator;
 pub mod offboarding_validator;
 pub mod onboarding_validator;
 pub mod onboarding_task_validator;
+pub mod onboarding_template_validator;
+pub mod onboarding_template_task_validator;
 pub mod promotion_validator;
 
 pub use clearance_item_validator::{ClearanceItemValidator, clearance_item_validator};
@@ -19,6 +21,8 @@ pub use final_settlement_validator::{FinalSettlementValidator, final_settlement_
 pub use offboarding_validator::{OffboardingValidator, offboarding_validator};
 pub use onboarding_validator::{OnboardingValidator, onboarding_validator};
 pub use onboarding_task_validator::{OnboardingTaskValidator, onboarding_task_validator};
+pub use onboarding_template_validator::{OnboardingTemplateValidator, onboarding_template_validator};
+pub use onboarding_template_task_validator::{OnboardingTemplateTaskValidator, onboarding_template_task_validator};
 pub use promotion_validator::{PromotionValidator, promotion_validator};
 
 // <<< CUSTOM

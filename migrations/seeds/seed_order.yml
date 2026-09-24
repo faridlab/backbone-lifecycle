@@ -14,3 +14,7 @@
 - onboarding_seed
 - onboarding_task_seed
 - promotion_seed
+
+# Newly added seeds (preserve manual order above):
+- onboarding_template_task_seed
+- onboarding_template_seed

@@ -38,6 +38,8 @@ pub use application::service::FinalSettlementService;
 pub use application::service::OffboardingService;
 pub use application::service::OnboardingService;
 pub use application::service::OnboardingTaskService;
+pub use application::service::OnboardingTemplateService;
+pub use application::service::OnboardingTemplateTaskService;
 pub use application::service::PromotionService;
 
 // Re-exports - Workflows
@@ -66,6 +68,8 @@ pub struct LifecycleModule {
     pub(crate) offboarding_service: Arc<OffboardingService>,
     pub(crate) onboarding_service: Arc<OnboardingService>,
     pub(crate) onboarding_task_service: Arc<OnboardingTaskService>,
+    pub(crate) onboarding_template_service: Arc<OnboardingTemplateService>,
+    pub(crate) onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
     pub(crate) promotion_service: Arc<PromotionService>,
     // <<< CUSTOM FIELDS
     /// The three career-lifecycle write-services (ADR-005 producers): each flips a workflow status
@@ -104,6 +108,8 @@ impl LifecycleModule {
             create_offboarding_routes,
             create_onboarding_routes,
             create_onboarding_task_routes,
+            create_onboarding_template_routes,
+            create_onboarding_template_task_routes,
             create_promotion_routes,
         };
 
@@ -114,6 +120,8 @@ impl LifecycleModule {
             .merge(create_offboarding_routes(self.offboarding_service.clone()))
             .merge(create_onboarding_routes(self.onboarding_service.clone()))
             .merge(create_onboarding_task_routes(self.onboarding_task_service.clone()))
+            .merge(create_onboarding_template_routes(self.onboarding_template_service.clone()))
+            .merge(create_onboarding_template_task_routes(self.onboarding_template_task_service.clone()))
             .merge(create_promotion_routes(self.promotion_service.clone()))
     }
 
@@ -140,6 +148,8 @@ impl LifecycleModule {
             create_offboarding_read_routes,
             create_onboarding_read_routes,
             create_onboarding_task_read_routes,
+            create_onboarding_template_read_routes,
+            create_onboarding_template_task_read_routes,
             create_promotion_read_routes,
         };
 
@@ -150,6 +160,8 @@ impl LifecycleModule {
             .merge(create_offboarding_read_routes(self.offboarding_service.clone()))
             .merge(create_onboarding_read_routes(self.onboarding_service.clone()))
             .merge(create_onboarding_task_read_routes(self.onboarding_task_service.clone()))
+            .merge(create_onboarding_template_read_routes(self.onboarding_template_service.clone()))
+            .merge(create_onboarding_template_task_read_routes(self.onboarding_template_task_service.clone()))
             .merge(create_promotion_read_routes(self.promotion_service.clone()))
     }
 
@@ -267,6 +279,14 @@ impl LifecycleModuleBuilder {
         let onboarding_task_repository = Arc::new(OnboardingTaskRepository::new(db_pool.clone()));
         let onboarding_task_service = Arc::new(OnboardingTaskService::with_repository(onboarding_task_repository.clone()));
 
+        // OnboardingTemplate service
+        let onboarding_template_repository = Arc::new(OnboardingTemplateRepository::new(db_pool.clone()));
+        let onboarding_template_service = Arc::new(OnboardingTemplateService::with_repository(onboarding_template_repository.clone()));
+
+        // OnboardingTemplateTask service
+        let onboarding_template_task_repository = Arc::new(OnboardingTemplateTaskRepository::new(db_pool.clone()));
+        let onboarding_template_task_service = Arc::new(OnboardingTemplateTaskService::with_repository(onboarding_template_task_repository.clone()));
+
         // Promotion service
         let promotion_repository = Arc::new(PromotionRepository::new(db_pool.clone()));
         let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
@@ -324,6 +344,8 @@ impl LifecycleModuleBuilder {
             offboarding_service,
             onboarding_service,
             onboarding_task_service,
+            onboarding_template_service,
+            onboarding_template_task_service,
             promotion_service,
             // <<< CUSTOM
             promotion_write_service,

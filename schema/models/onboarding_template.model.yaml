@@ -1,0 +1,98 @@
+# =============================================================================
+# Domain: lifecycle
+# Entity: OnboardingTemplate (+ OnboardingTemplateTask)
+# Description: The reusable checklist a hire's onboarding is stamped out from.
+#              A template names its steps once — hand over the laptop, create
+#              the accounts, walk the floor — and every onboarding created
+#              from it starts with those tasks, each with its owner and its
+#              due offset from the start date.
+# =============================================================================
+
+models:
+  - name: OnboardingTemplate
+    collection: onboarding_templates
+    description: "The reusable joiner checklist an onboarding is created from."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique template id"
+
+      name:
+        type: string
+        attributes: ["@required", "@length(max=120)"]
+        description: "Template name"
+
+      description:
+        type: string?
+        attributes: ["@length(max=500)"]
+        description: "What this template is for"
+
+      is_default:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "The template a hire uses when none is named (one per unit)"
+
+      is_active:
+        type: boolean
+        attributes: ["@default(true)"]
+        description: "Retired templates stay referenced by past onboardings"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [is_active]
+
+  - name: OnboardingTemplateTask
+    collection: onboarding_template_tasks
+    description: "One step of a template: what happens, who owns it, when it is due."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique template task id"
+
+      template_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(OnboardingTemplate.id)"]
+        description: "Parent template # FK lifecycle.onboarding_templates.id (in-module)"
+
+      title:
+        type: string
+        attributes: ["@required", "@length(max=255)"]
+        description: "Task title"
+
+      category:
+        type: string?
+        attributes: ["@length(max=40)"]
+        description: "Task category, free-typed on the template (document, equipment, account_access, policy_ack, induction) and carried onto the task's category when it matches the task enum"
+
+      owner_role:
+        type: string?
+        attributes: ["@length(max=60)"]
+        description: "The owning party by role (hr, it, manager, buddy) — resolved to a person per hire"
+
+      due_day_offset:
+        type: integer
+        attributes: ["@default(0)"]
+        description: "Days after the onboarding start date this task is due"
+
+      ordinal:
+        type: integer
+        attributes: ["@default(0)"]
+        description: "Display order within the template"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [template_id]

@@ -95,6 +95,34 @@ async fn test_onboarding_task_api() {
 }
 
 #[tokio::test]
+async fn test_onboarding_template_api() {
+    let mut test = OnboardingTemplateApiTest::new();
+    let results = test.run_all().await;
+
+    let failed: Vec<_> = results.iter().filter(|r| !r.success).collect();
+    if !failed.is_empty() {
+        for f in &failed {
+            eprintln!("FAILED: {} - {}", f.test_name, f.details);
+        }
+        panic!("{} tests failed", failed.len());
+    }
+}
+
+#[tokio::test]
+async fn test_onboarding_template_task_api() {
+    let mut test = OnboardingTemplateTaskApiTest::new();
+    let results = test.run_all().await;
+
+    let failed: Vec<_> = results.iter().filter(|r| !r.success).collect();
+    if !failed.is_empty() {
+        for f in &failed {
+            eprintln!("FAILED: {} - {}", f.test_name, f.details);
+        }
+        panic!("{} tests failed", failed.len());
+    }
+}
+
+#[tokio::test]
 async fn test_promotion_api() {
     let mut test = PromotionApiTest::new();
     let results = test.run_all().await;

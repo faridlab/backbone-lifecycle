@@ -12,6 +12,8 @@ pub mod final_settlement_specification;
 pub mod offboarding_specification;
 pub mod onboarding_specification;
 pub mod onboarding_task_specification;
+pub mod onboarding_template_specification;
+pub mod onboarding_template_task_specification;
 pub mod promotion_specification;
 
 // <<< CUSTOM

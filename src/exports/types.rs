@@ -375,6 +375,124 @@ pub struct OnboardingTaskRef {
 }
 
 // ============================================================================
+// ONBOARDINGTEMPLATE TYPES
+// ============================================================================
+
+/// Type-safe ID for OnboardingTemplate
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct OnboardingTemplateId(pub Uuid);
+
+impl OnboardingTemplateId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for OnboardingTemplateId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<OnboardingTemplateId> for Uuid {
+    fn from(id: OnboardingTemplateId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for OnboardingTemplate
+///
+/// This is the public representation of OnboardingTemplate for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateDto {
+    pub id: OnboardingTemplateId,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of OnboardingTemplate for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateSummary {
+    pub id: OnboardingTemplateId,
+    pub name: String,
+}
+
+/// Reference to OnboardingTemplate for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateRef {
+    pub id: OnboardingTemplateId,
+}
+
+// ============================================================================
+// ONBOARDINGTEMPLATETASK TYPES
+// ============================================================================
+
+/// Type-safe ID for OnboardingTemplateTask
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskId(pub Uuid);
+
+impl OnboardingTemplateTaskId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for OnboardingTemplateTaskId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<OnboardingTemplateTaskId> for Uuid {
+    fn from(id: OnboardingTemplateTaskId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for OnboardingTemplateTask
+///
+/// This is the public representation of OnboardingTemplateTask for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskDto {
+    pub id: OnboardingTemplateTaskId,
+    pub template_id: Uuid,
+    pub title: String,
+    pub category: Option<String>,
+    pub owner_role: Option<String>,
+    pub due_day_offset: i32,
+    pub ordinal: i32,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of OnboardingTemplateTask for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskSummary {
+    pub id: OnboardingTemplateTaskId,
+    pub title: String,
+}
+
+/// Reference to OnboardingTemplateTask for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskRef {
+    pub id: OnboardingTemplateTaskId,
+}
+
+// ============================================================================
 // PROMOTION TYPES
 // ============================================================================
 

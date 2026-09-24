@@ -11,6 +11,8 @@ pub mod final_settlement_handler;
 pub mod offboarding_handler;
 pub mod onboarding_handler;
 pub mod onboarding_task_handler;
+pub mod onboarding_template_handler;
+pub mod onboarding_template_task_handler;
 pub mod promotion_handler;
 
 // <<< CUSTOM
@@ -25,6 +27,8 @@ pub use final_settlement_handler::{create_final_settlement_routes, create_final_
 pub use offboarding_handler::{create_offboarding_routes, create_offboarding_read_routes, create_offboarding_write_routes};
 pub use onboarding_handler::{create_onboarding_routes, create_onboarding_read_routes, create_onboarding_write_routes};
 pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboarding_task_read_routes, create_onboarding_task_write_routes};
+pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes};
+pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
 pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
 // <<< CUSTOM
 pub use guarded_routes::create_guarded_lifecycle_routes;

@@ -45,6 +45,12 @@ pub use events::*;
 /// - `OnboardingTaskDto` - Data transfer object for OnboardingTask
 /// - `OnboardingTaskSummary` - Summary view of OnboardingTask
 /// - `OnboardingTaskId` - Type-safe ID wrapper
+/// - `OnboardingTemplateDto` - Data transfer object for OnboardingTemplate
+/// - `OnboardingTemplateSummary` - Summary view of OnboardingTemplate
+/// - `OnboardingTemplateId` - Type-safe ID wrapper
+/// - `OnboardingTemplateTaskDto` - Data transfer object for OnboardingTemplateTask
+/// - `OnboardingTemplateTaskSummary` - Summary view of OnboardingTemplateTask
+/// - `OnboardingTemplateTaskId` - Type-safe ID wrapper
 /// - `PromotionDto` - Data transfer object for Promotion
 /// - `PromotionSummary` - Summary view of Promotion
 /// - `PromotionId` - Type-safe ID wrapper
@@ -68,6 +74,12 @@ pub use events::*;
 /// - `OnboardingTaskCreatedEvent` - Published when OnboardingTask is created
 /// - `OnboardingTaskUpdatedEvent` - Published when OnboardingTask is updated
 /// - `OnboardingTaskDeletedEvent` - Published when OnboardingTask is deleted
+/// - `OnboardingTemplateCreatedEvent` - Published when OnboardingTemplate is created
+/// - `OnboardingTemplateUpdatedEvent` - Published when OnboardingTemplate is updated
+/// - `OnboardingTemplateDeletedEvent` - Published when OnboardingTemplate is deleted
+/// - `OnboardingTemplateTaskCreatedEvent` - Published when OnboardingTemplateTask is created
+/// - `OnboardingTemplateTaskUpdatedEvent` - Published when OnboardingTemplateTask is updated
+/// - `OnboardingTemplateTaskDeletedEvent` - Published when OnboardingTemplateTask is deleted
 /// - `PromotionCreatedEvent` - Published when Promotion is created
 /// - `PromotionUpdatedEvent` - Published when Promotion is updated
 /// - `PromotionDeletedEvent` - Published when Promotion is deleted

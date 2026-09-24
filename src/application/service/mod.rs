@@ -13,6 +13,8 @@ pub mod final_settlement_service;
 pub mod offboarding_service;
 pub mod onboarding_service;
 pub mod onboarding_task_service;
+pub mod onboarding_template_service;
+pub mod onboarding_template_task_service;
 pub mod promotion_service;
 
 // <<< CUSTOM
@@ -44,6 +46,8 @@ pub use final_settlement_service::FinalSettlementService;
 pub use offboarding_service::OffboardingService;
 pub use onboarding_service::OnboardingService;
 pub use onboarding_task_service::OnboardingTaskService;
+pub use onboarding_template_service::OnboardingTemplateService;
+pub use onboarding_template_task_service::OnboardingTemplateTaskService;
 pub use promotion_service::PromotionService;
 // <<< CUSTOM
 pub use pesangon::{

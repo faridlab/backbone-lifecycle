@@ -23,6 +23,10 @@ tags:
     description: Onboarding management endpoints
   - name: OnboardingTasks
     description: OnboardingTask management endpoints
+  - name: OnboardingTemplates
+    description: OnboardingTemplate management endpoints
+  - name: OnboardingTemplateTasks
+    description: OnboardingTemplateTask management endpoints
   - name: Promotions
     description: Promotion management endpoints
 
@@ -2223,6 +2227,738 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
+  /api/v1/lifecycle/onboarding_templates:
+    get:
+      tags:
+        - OnboardingTemplates
+      summary: List OnboardingTemplates
+      description: Get a paginated list of OnboardingTemplates with optional filtering and sorting
+      operationId: listOnboardingTemplates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Create OnboardingTemplate
+      description: Create a new OnboardingTemplate
+      operationId: createOnboardingTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOnboardingTemplateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/lifecycle/onboarding_templates/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - OnboardingTemplates
+      summary: Get OnboardingTemplate by ID
+      operationId: getOnboardingTemplate
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - OnboardingTemplates
+      summary: Update OnboardingTemplate (full)
+      operationId: updateOnboardingTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOnboardingTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - OnboardingTemplates
+      summary: Update OnboardingTemplate (partial)
+      operationId: patchOnboardingTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchOnboardingTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - OnboardingTemplates
+      summary: Delete OnboardingTemplate (soft)
+      operationId: deleteOnboardingTemplate
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/onboarding_templates/bulk:
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk create OnboardingTemplates
+      operationId: bulkCreateOnboardingTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateOnboardingTemplateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OnboardingTemplate'
+    put:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk update OnboardingTemplates (full, atomic)
+      operationId: bulkUpdateOnboardingTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateOnboardingTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk partial-update OnboardingTemplates (atomic)
+      operationId: bulkPatchOnboardingTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_templates/upsert:
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Upsert OnboardingTemplate
+      operationId: upsertOnboardingTemplate
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOnboardingTemplateRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+
+  /api/v1/lifecycle/onboarding_templates/trash:
+    get:
+      tags:
+        - OnboardingTemplates
+      summary: List deleted OnboardingTemplates
+      operationId: listDeletedOnboardingTemplates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateList'
+
+  /api/v1/lifecycle/onboarding_templates/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Restore deleted OnboardingTemplate
+      operationId: restoreOnboardingTemplate
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/onboarding_templates/empty:
+    delete:
+      tags:
+        - OnboardingTemplates
+      summary: Empty trash for OnboardingTemplates
+      operationId: emptyTrashOnboardingTemplates
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/lifecycle/onboarding_templates/delete/bulk:
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk soft-delete OnboardingTemplates by ids (atomic)
+      operationId: bulkDeleteOnboardingTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_templates/restore/bulk:
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk restore OnboardingTemplates by ids (atomic)
+      operationId: bulkRestoreOnboardingTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_templates/restore/all:
+    post:
+      tags:
+        - OnboardingTemplates
+      summary: Restore all soft-deleted OnboardingTemplates
+      operationId: restoreAllOnboardingTemplates
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/lifecycle/onboarding_templates/trash/bulk:
+    delete:
+      tags:
+        - OnboardingTemplates
+      summary: Bulk permanently-delete OnboardingTemplates from trash by ids (atomic)
+      operationId: bulkPermanentDeleteOnboardingTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_template_tasks:
+    get:
+      tags:
+        - OnboardingTemplateTasks
+      summary: List OnboardingTemplateTasks
+      description: Get a paginated list of OnboardingTemplateTasks with optional filtering and sorting
+      operationId: listOnboardingTemplateTasks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTaskList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Create OnboardingTemplateTask
+      description: Create a new OnboardingTemplateTask
+      operationId: createOnboardingTemplateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOnboardingTemplateTaskRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/lifecycle/onboarding_template_tasks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Get OnboardingTemplateTask by ID
+      operationId: getOnboardingTemplateTask
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Update OnboardingTemplateTask (full)
+      operationId: updateOnboardingTemplateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOnboardingTemplateTaskRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Update OnboardingTemplateTask (partial)
+      operationId: patchOnboardingTemplateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchOnboardingTemplateTaskRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Delete OnboardingTemplateTask (soft)
+      operationId: deleteOnboardingTemplateTask
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/onboarding_template_tasks/bulk:
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk create OnboardingTemplateTasks
+      operationId: bulkCreateOnboardingTemplateTasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateOnboardingTemplateTaskRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OnboardingTemplateTask'
+    put:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk update OnboardingTemplateTasks (full, atomic)
+      operationId: bulkUpdateOnboardingTemplateTasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateOnboardingTemplateTaskRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTaskBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk partial-update OnboardingTemplateTasks (atomic)
+      operationId: bulkPatchOnboardingTemplateTasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTaskBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_template_tasks/upsert:
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Upsert OnboardingTemplateTask
+      operationId: upsertOnboardingTemplateTask
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOnboardingTemplateTaskRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+
+  /api/v1/lifecycle/onboarding_template_tasks/trash:
+    get:
+      tags:
+        - OnboardingTemplateTasks
+      summary: List deleted OnboardingTemplateTasks
+      operationId: listDeletedOnboardingTemplateTasks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTaskList'
+
+  /api/v1/lifecycle/onboarding_template_tasks/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Restore deleted OnboardingTemplateTask
+      operationId: restoreOnboardingTemplateTask
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/onboarding_template_tasks/empty:
+    delete:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Empty trash for OnboardingTemplateTasks
+      operationId: emptyTrashOnboardingTemplateTasks
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/lifecycle/onboarding_template_tasks/delete/bulk:
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk soft-delete OnboardingTemplateTasks by ids (atomic)
+      operationId: bulkDeleteOnboardingTemplateTasks
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_template_tasks/restore/bulk:
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk restore OnboardingTemplateTasks by ids (atomic)
+      operationId: bulkRestoreOnboardingTemplateTasks
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingTemplateTaskBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/onboarding_template_tasks/restore/all:
+    post:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Restore all soft-deleted OnboardingTemplateTasks
+      operationId: restoreAllOnboardingTemplateTasks
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/lifecycle/onboarding_template_tasks/trash/bulk:
+    delete:
+      tags:
+        - OnboardingTemplateTasks
+      summary: Bulk permanently-delete OnboardingTemplateTasks from trash by ids (atomic)
+      operationId: bulkPermanentDeleteOnboardingTemplateTasks
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /api/v1/lifecycle/promotions:
     get:
       tags:
@@ -3448,6 +4184,245 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OnboardingTask'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    OnboardingTemplate:
+      type: object
+      required:
+        - id
+        - name
+        - is_default
+        - is_active
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          nullable: true
+          type: string
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+        metadata:
+          type: object
+
+    OnboardingTemplateBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingTemplate'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateOnboardingTemplateRequest:
+      type: object
+      required:
+        - name
+        - is_default
+        - is_active
+        - metadata
+      properties:
+        name:
+          type: string
+        description:
+          nullable: true
+          type: string
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+        metadata:
+          type: object
+
+    UpdateOnboardingTemplateRequest:
+      type: object
+      required:
+        - name
+        - is_default
+        - is_active
+        - metadata
+      properties:
+        name:
+          type: string
+        description:
+          nullable: true
+          type: string
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+        metadata:
+          type: object
+
+    PatchOnboardingTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          nullable: true
+          type: string
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+        metadata:
+          type: object
+
+    OnboardingTemplateList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingTemplate'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    OnboardingTemplateTask:
+      type: object
+      required:
+        - id
+        - template_id
+        - title
+        - due_day_offset
+        - ordinal
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          nullable: true
+          type: string
+        owner_role:
+          nullable: true
+          type: string
+        due_day_offset:
+          type: integer
+          format: int32
+        ordinal:
+          type: integer
+          format: int32
+        metadata:
+          type: object
+
+    OnboardingTemplateTaskBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingTemplateTask'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateOnboardingTemplateTaskRequest:
+      type: object
+      required:
+        - template_id
+        - title
+        - due_day_offset
+        - ordinal
+        - metadata
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          nullable: true
+          type: string
+        owner_role:
+          nullable: true
+          type: string
+        due_day_offset:
+          type: integer
+          format: int32
+        ordinal:
+          type: integer
+          format: int32
+        metadata:
+          type: object
+
+    UpdateOnboardingTemplateTaskRequest:
+      type: object
+      required:
+        - template_id
+        - title
+        - due_day_offset
+        - ordinal
+        - metadata
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          nullable: true
+          type: string
+        owner_role:
+          nullable: true
+          type: string
+        due_day_offset:
+          type: integer
+          format: int32
+        ordinal:
+          type: integer
+          format: int32
+        metadata:
+          type: object
+
+    PatchOnboardingTemplateTaskRequest:
+      type: object
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          nullable: true
+          type: string
+        owner_role:
+          nullable: true
+          type: string
+        due_day_offset:
+          type: integer
+          format: int32
+        ordinal:
+          type: integer
+          format: int32
+        metadata:
+          type: object
+
+    OnboardingTemplateTaskList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingTemplateTask'
         meta:
           $ref: '#/components/schemas/PaginationMeta'
 

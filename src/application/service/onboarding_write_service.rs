@@ -163,6 +163,21 @@ impl OnboardingWriteService {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }
 
+        // The template to stamp out: the one named, or the unit's default
+        // when none is. A hire with no template anywhere starts with an
+        // empty checklist (completable — the joiner had nothing to do).
+        let template_id = match input.template_id {
+            Some(t) => Some(t),
+            None => sqlx::query_scalar::<_, Uuid>(
+                r#"SELECT id FROM lifecycle.onboarding_templates
+                    WHERE is_default AND is_active
+                      AND (metadata->>'deleted_at') IS NULL
+                    LIMIT 1"#,
+            )
+            .fetch_optional(&mut *tx)
+            .await?,
+        };
+
         let id = Uuid::new_v4();
         sqlx::query(
             r#"INSERT INTO lifecycle.onboardings
@@ -174,13 +189,44 @@ impl OnboardingWriteService {
         .bind(input.employee_id)
         .bind(input.start_date)
         .bind(input.probation_end_date)
-        .bind(input.template_id)
+        .bind(template_id)
         .bind(
             r#"{"created_at":null,"updated_at":null,"deleted_at":null,
                 "created_by":null,"updated_by":null,"deleted_by":null}"#,
         )
         .execute(&mut *tx)
         .await?;
+
+        // Stamp the template's steps out as the joiner's checklist — each
+        // task due at its own offset from the start date. The template's
+        // category is free-typed, so only a value the task enum knows is
+        // cast (anything else lands uncategorized, never refused). Owner
+        // roles are template-level vocabulary; resolving a role to a person
+        // is the host's policy call, so the task's owner starts unset.
+        if let Some(template_id) = template_id {
+            sqlx::query(
+                r#"INSERT INTO lifecycle.onboarding_tasks
+                       (onboarding_id, title, category, due_date, status, metadata)
+                   SELECT $1,
+                          t.title,
+                          CASE WHEN t.category IN ('document','equipment','account_access',
+                                                   'policy_ack','induction')
+                               THEN t.category::task_category END,
+                          $2::date + t.due_day_offset,
+                          'pending',
+                          '{"created_at":null,"updated_at":null,"deleted_at":null,
+                            "created_by":null,"updated_by":null,"deleted_by":null}'::jsonb
+                     FROM lifecycle.onboarding_template_tasks t
+                    WHERE t.template_id = $3
+                      AND (t.metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(id)
+            .bind(input.start_date)
+            .bind(template_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
         tx.commit().await?;
         Ok(id)
     }

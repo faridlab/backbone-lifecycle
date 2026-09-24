@@ -15,6 +15,8 @@ use crate::application::service::FinalSettlementService;
 use crate::application::service::OffboardingService;
 use crate::application::service::OnboardingService;
 use crate::application::service::OnboardingTaskService;
+use crate::application::service::OnboardingTemplateService;
+use crate::application::service::OnboardingTemplateTaskService;
 use crate::application::service::PromotionService;
 
 /// Application state for dependency injection.
@@ -47,6 +49,10 @@ pub struct AppState {
     pub onboarding_service: Arc<OnboardingService>,
     /// OnboardingTask service
     pub onboarding_task_service: Arc<OnboardingTaskService>,
+    /// OnboardingTemplate service
+    pub onboarding_template_service: Arc<OnboardingTemplateService>,
+    /// OnboardingTemplateTask service
+    pub onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
     /// Promotion service
     pub promotion_service: Arc<PromotionService>,
 }
@@ -60,6 +66,8 @@ impl AppState {
         offboarding_service: Arc<OffboardingService>,
         onboarding_service: Arc<OnboardingService>,
         onboarding_task_service: Arc<OnboardingTaskService>,
+        onboarding_template_service: Arc<OnboardingTemplateService>,
+        onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
         promotion_service: Arc<PromotionService>
     ) -> Self {
         Self {
@@ -69,6 +77,8 @@ impl AppState {
             offboarding_service,
             onboarding_service,
             onboarding_task_service,
+            onboarding_template_service,
+            onboarding_template_task_service,
             promotion_service,
         }
     }
@@ -82,6 +92,8 @@ impl AppState {
             offboarding_service: module.offboarding_service.clone(),
             onboarding_service: module.onboarding_service.clone(),
             onboarding_task_service: module.onboarding_task_service.clone(),
+            onboarding_template_service: module.onboarding_template_service.clone(),
+            onboarding_template_task_service: module.onboarding_template_task_service.clone(),
             promotion_service: module.promotion_service.clone(),
         }
     }
@@ -98,6 +110,8 @@ pub struct AppStateBuilder {
     offboarding_service: Option<Arc<OffboardingService>>,
     onboarding_service: Option<Arc<OnboardingService>>,
     onboarding_task_service: Option<Arc<OnboardingTaskService>>,
+    onboarding_template_service: Option<Arc<OnboardingTemplateService>>,
+    onboarding_template_task_service: Option<Arc<OnboardingTemplateTaskService>>,
     promotion_service: Option<Arc<PromotionService>>,
 }
 
@@ -143,6 +157,18 @@ impl AppStateBuilder {
         self
     }
 
+    /// Set the OnboardingTemplate service.
+    pub fn with_onboarding_template_service(mut self, service: Arc<OnboardingTemplateService>) -> Self {
+        self.onboarding_template_service = Some(service);
+        self
+    }
+
+    /// Set the OnboardingTemplateTask service.
+    pub fn with_onboarding_template_task_service(mut self, service: Arc<OnboardingTemplateTaskService>) -> Self {
+        self.onboarding_template_task_service = Some(service);
+        self
+    }
+
     /// Set the Promotion service.
     pub fn with_promotion_service(mut self, service: Arc<PromotionService>) -> Self {
         self.promotion_service = Some(service);
@@ -162,6 +188,8 @@ impl AppStateBuilder {
             offboarding_service: self.offboarding_service.expect("offboarding_service is required"),
             onboarding_service: self.onboarding_service.expect("onboarding_service is required"),
             onboarding_task_service: self.onboarding_task_service.expect("onboarding_task_service is required"),
+            onboarding_template_service: self.onboarding_template_service.expect("onboarding_template_service is required"),
+            onboarding_template_task_service: self.onboarding_template_task_service.expect("onboarding_template_task_service is required"),
             promotion_service: self.promotion_service.expect("promotion_service is required"),
         }
     }

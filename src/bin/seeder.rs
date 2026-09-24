@@ -18,6 +18,8 @@ use backbone_lifecycle::seeders::SeedFinalSettlementSeeder;
 use backbone_lifecycle::seeders::SeedOffboardingSeeder;
 use backbone_lifecycle::seeders::SeedOnboardingSeeder;
 use backbone_lifecycle::seeders::SeedOnboardingTaskSeeder;
+use backbone_lifecycle::seeders::SeedOnboardingTemplateSeeder;
+use backbone_lifecycle::seeders::SeedOnboardingTemplateTaskSeeder;
 use backbone_lifecycle::seeders::SeedPromotionSeeder;
 use backbone_lifecycle::seeders::Seeder;
 
@@ -53,6 +55,8 @@ async fn main() -> Result<()> {
     seeders.push(Box::new(SeedOffboardingSeeder::new()));
     seeders.push(Box::new(SeedOnboardingSeeder::new()));
     seeders.push(Box::new(SeedOnboardingTaskSeeder::new()));
+    seeders.push(Box::new(SeedOnboardingTemplateSeeder::new()));
+    seeders.push(Box::new(SeedOnboardingTemplateTaskSeeder::new()));
     seeders.push(Box::new(SeedPromotionSeeder::new()));
 
     // Sort by order

@@ -12,14 +12,17 @@ pub mod final_settlement_api_test;
 pub mod offboarding_api_test;
 pub mod onboarding_api_test;
 pub mod onboarding_task_api_test;
+pub mod onboarding_template_api_test;
+pub mod onboarding_template_task_api_test;
 pub mod promotion_api_test;
 
 // Re-exports for convenience
-pub use crud_test_base::*;
 pub use clearance_item_api_test::*;
 pub use exit_interview_api_test::*;
 pub use final_settlement_api_test::*;
 pub use offboarding_api_test::*;
 pub use onboarding_api_test::*;
 pub use onboarding_task_api_test::*;
+pub use onboarding_template_api_test::*;
+pub use onboarding_template_task_api_test::*;
 pub use promotion_api_test::*;

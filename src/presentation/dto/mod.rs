@@ -11,6 +11,8 @@ pub mod final_settlement_dto;
 pub mod offboarding_dto;
 pub mod onboarding_dto;
 pub mod onboarding_task_dto;
+pub mod onboarding_template_dto;
+pub mod onboarding_template_task_dto;
 pub mod promotion_dto;
 
 // Re-exports
@@ -61,6 +63,22 @@ pub use onboarding_task_dto::{
     OnboardingTaskResponseDto,
     OnboardingTaskListResponseDto,
     OnboardingTaskSummaryDto,
+};
+pub use onboarding_template_dto::{
+    CreateOnboardingTemplateDto,
+    UpdateOnboardingTemplateDto,
+    PatchOnboardingTemplateDto,
+    OnboardingTemplateResponseDto,
+    OnboardingTemplateListResponseDto,
+    OnboardingTemplateSummaryDto,
+};
+pub use onboarding_template_task_dto::{
+    CreateOnboardingTemplateTaskDto,
+    UpdateOnboardingTemplateTaskDto,
+    PatchOnboardingTemplateTaskDto,
+    OnboardingTemplateTaskResponseDto,
+    OnboardingTemplateTaskListResponseDto,
+    OnboardingTemplateTaskSummaryDto,
 };
 pub use promotion_dto::{
     CreatePromotionDto,

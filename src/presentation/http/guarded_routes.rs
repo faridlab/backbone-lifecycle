@@ -474,6 +474,20 @@ async fn confirm_final_settlement(
     }
 }
 
+/// Mark a confirmed settlement paid — the remittance acknowledgement.
+async fn mark_paid_final_settlement(
+    State(svc): State<Arc<FinalSettlementWriteService>>,
+    _org: OrgContext,
+    Path(settlement_id): Path<Uuid>,
+) -> axum::response::Response {
+    match svc.mark_paid(settlement_id).await {
+        Ok(Some(())) => (StatusCode::OK, Json(OkResponse { ok: true })).into_response(),
+        // Idempotent no-op: already paid.
+        Ok(None) => (StatusCode::OK, Json(OkResponse { ok: false })).into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
 // ── Composition ─────────────────────────────────────────────────────────────────
 
 /// The verb routes (state-machine writes). Combined with read-only CRUD for
@@ -522,6 +536,7 @@ fn create_lifecycle_verb_routes(
             "/final_settlements/:id/confirm",
             post(confirm_final_settlement),
         )
+        .route("/final_settlements/:id/mark-paid", post(mark_paid_final_settlement))
         .with_state(settlements);
 
     Router::new()
@@ -547,7 +562,8 @@ fn create_lifecycle_verb_routes(
 pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
     use crate::presentation::http::{
         create_clearance_item_write_routes, create_exit_interview_write_routes,
-        create_onboarding_task_write_routes,
+        create_onboarding_task_write_routes, create_onboarding_template_task_write_routes,
+        create_onboarding_template_write_routes,
     };
 
     Router::new()
@@ -566,6 +582,17 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
         ))
         .merge(create_exit_interview_write_routes(
             m.exit_interview_service.clone(),
+        ))
+        // Onboarding templates are master data, not workflow carriers: the
+        // generic write surface is the right one (HR authors the checklist
+        // once; every onboarding created from it stamps the tasks out). The
+        // workflow side stays verb-only — a template edit never reaches an
+        // in-flight onboarding's tasks.
+        .merge(create_onboarding_template_write_routes(
+            m.onboarding_template_service.clone(),
+        ))
+        .merge(create_onboarding_template_task_write_routes(
+            m.onboarding_template_task_service.clone(),
         ))
         // The workflow carriers: verbs only.
         .merge(create_lifecycle_verb_routes(

@@ -12,6 +12,8 @@ pub mod final_settlement_repository;
 pub mod offboarding_repository;
 pub mod onboarding_repository;
 pub mod onboarding_task_repository;
+pub mod onboarding_template_repository;
+pub mod onboarding_template_task_repository;
 pub mod promotion_repository;
 
 // Re-exports
@@ -50,6 +52,18 @@ pub use onboarding_task_repository::{
     OnboardingTaskPaginationParams,
     OnboardingTaskPaginatedResult,
     OnboardingTaskFilter,
+};
+pub use onboarding_template_repository::{
+    OnboardingTemplateRepository,
+    OnboardingTemplatePaginationParams,
+    OnboardingTemplatePaginatedResult,
+    OnboardingTemplateFilter,
+};
+pub use onboarding_template_task_repository::{
+    OnboardingTemplateTaskRepository,
+    OnboardingTemplateTaskPaginationParams,
+    OnboardingTemplateTaskPaginatedResult,
+    OnboardingTemplateTaskFilter,
 };
 pub use promotion_repository::{
     PromotionRepository,

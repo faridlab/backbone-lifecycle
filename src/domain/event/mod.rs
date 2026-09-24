@@ -14,6 +14,10 @@ pub mod onboarding_events;
 pub mod onboarding_event_handlers;
 pub mod onboarding_task_events;
 pub mod onboarding_task_event_handlers;
+pub mod onboarding_template_events;
+pub mod onboarding_template_event_handlers;
+pub mod onboarding_template_task_events;
+pub mod onboarding_template_task_event_handlers;
 pub mod promotion_events;
 pub mod promotion_event_handlers;
 
@@ -29,6 +33,10 @@ pub use onboarding_events::{OnboardingEvent, OnboardingEventPublisher, NoopOnboa
 pub use onboarding_event_handlers::OnboardingEventHandler;
 pub use onboarding_task_events::{OnboardingTaskEvent, OnboardingTaskEventPublisher, NoopOnboardingTaskEventPublisher};
 pub use onboarding_task_event_handlers::OnboardingTaskEventHandler;
+pub use onboarding_template_events::{OnboardingTemplateEvent, OnboardingTemplateEventPublisher, NoopOnboardingTemplateEventPublisher};
+pub use onboarding_template_event_handlers::OnboardingTemplateEventHandler;
+pub use onboarding_template_task_events::{OnboardingTemplateTaskEvent, OnboardingTemplateTaskEventPublisher, NoopOnboardingTemplateTaskEventPublisher};
+pub use onboarding_template_task_event_handlers::OnboardingTemplateTaskEventHandler;
 pub use promotion_events::{PromotionEvent, PromotionEventPublisher, NoopPromotionEventPublisher};
 pub use promotion_event_handlers::PromotionEventHandler;
 

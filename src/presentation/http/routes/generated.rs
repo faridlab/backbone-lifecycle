@@ -15,6 +15,8 @@ use super::{
     offboarding_handler::create_offboarding_routes,
     onboarding_handler::create_onboarding_routes,
     onboarding_task_handler::create_onboarding_task_routes,
+    onboarding_template_handler::create_onboarding_template_routes,
+    onboarding_template_task_handler::create_onboarding_template_task_routes,
     promotion_handler::create_promotion_routes,
 };
 
@@ -25,6 +27,8 @@ use crate::application::service::{
     OffboardingService,
     OnboardingService,
     OnboardingTaskService,
+    OnboardingTemplateService,
+    OnboardingTemplateTaskService,
     PromotionService,
 };
 
@@ -36,6 +40,8 @@ pub struct HttpServices {
     pub offboarding: Arc<OffboardingService>,
     pub onboarding: Arc<OnboardingService>,
     pub onboarding_task: Arc<OnboardingTaskService>,
+    pub onboarding_template: Arc<OnboardingTemplateService>,
+    pub onboarding_template_task: Arc<OnboardingTemplateTaskService>,
     pub promotion: Arc<PromotionService>,
 }
 
@@ -68,6 +74,10 @@ pub fn configure_routes(services: HttpServices) -> Router {
         .merge(create_onboarding_routes(services.onboarding))
         // OnboardingTask routes (12 Backbone endpoints)
         .merge(create_onboarding_task_routes(services.onboarding_task))
+        // OnboardingTemplate routes (12 Backbone endpoints)
+        .merge(create_onboarding_template_routes(services.onboarding_template))
+        // OnboardingTemplateTask routes (12 Backbone endpoints)
+        .merge(create_onboarding_template_task_routes(services.onboarding_template_task))
         // Promotion routes (12 Backbone endpoints)
         .merge(create_promotion_routes(services.promotion))
 }
@@ -98,6 +108,14 @@ pub mod individual {
 
     pub fn onboarding_task_routes(service: Arc<OnboardingTaskService>) -> Router {
         create_onboarding_task_routes(service)
+    }
+
+    pub fn onboarding_template_routes(service: Arc<OnboardingTemplateService>) -> Router {
+        create_onboarding_template_routes(service)
+    }
+
+    pub fn onboarding_template_task_routes(service: Arc<OnboardingTemplateTaskService>) -> Router {
+        create_onboarding_template_task_routes(service)
     }
 
     pub fn promotion_routes(service: Arc<PromotionService>) -> Router {

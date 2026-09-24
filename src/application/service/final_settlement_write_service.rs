@@ -546,6 +546,59 @@ impl FinalSettlementWriteService {
         tx.commit().await?;
         Ok(Some(ack))
     }
+
+    /// Mark a confirmed settlement PAID — the remittance acknowledgement.
+    ///
+    /// Confirming posts the balanced journal (the leaver's last pay is booked
+    /// and owed); paying records that the money moved. Only a `confirmed`
+    /// settlement may flip: a draft has nothing booked to pay, and an
+    /// already-`paid` row answers `Ok(None)` (idempotent on the row's own
+    /// state, the same posture as `confirm`). The verb is deliberately bare —
+    /// the payment module's remittance lane can call it as a hook when it
+    /// owns the transfer, and an operator can call it when the transfer left
+    /// by another rail.
+    pub async fn mark_paid(&self, settlement_id: Uuid) -> Result<Option<()>, FinalSettlementError> {
+        let mut tx = self.pool.begin().await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+        }
+
+        let row = sqlx::query(
+            r#"SELECT status::text AS status FROM lifecycle.final_settlements
+                WHERE id = $1 FOR UPDATE"#,
+        )
+        .bind(settlement_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let row = match row {
+            Some(r) => r,
+            None => {
+                tx.rollback().await?;
+                return Err(FinalSettlementError::NotFound(settlement_id));
+            }
+        };
+        let status: String = row.try_get("status")?;
+        if status == "paid" {
+            // Idempotent: the row's own state already says the money moved.
+            tx.rollback().await?;
+            return Ok(None);
+        }
+        if status != "confirmed" {
+            tx.rollback().await?;
+            return Err(FinalSettlementError::NotDraft { settlement_id, status });
+        }
+
+        sqlx::query(
+            r#"UPDATE lifecycle.final_settlements
+                  SET status = 'paid'
+                WHERE id = $1"#,
+        )
+        .bind(settlement_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(Some(()))
+    }
 }
 
 /// The default sink: nothing is wired (accounting composes later). Posting fails

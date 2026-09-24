@@ -1,0 +1,3 @@
+-- SEED: none — a default template is per-tenant reference data (the org-fenced
+-- row keys on the acting company), so the HOST's tenant seeds carry it, not the
+-- module's global seed.

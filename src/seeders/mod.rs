@@ -15,6 +15,8 @@ mod final_settlement_seeder;
 mod offboarding_seeder;
 mod onboarding_seeder;
 mod onboarding_task_seeder;
+mod onboarding_template_seeder;
+mod onboarding_template_task_seeder;
 mod promotion_seeder;
 
 pub use clearance_item_seeder::SeedClearanceItemSeeder;
@@ -23,6 +25,8 @@ pub use final_settlement_seeder::SeedFinalSettlementSeeder;
 pub use offboarding_seeder::SeedOffboardingSeeder;
 pub use onboarding_seeder::SeedOnboardingSeeder;
 pub use onboarding_task_seeder::SeedOnboardingTaskSeeder;
+pub use onboarding_template_seeder::SeedOnboardingTemplateSeeder;
+pub use onboarding_template_task_seeder::SeedOnboardingTemplateTaskSeeder;
 pub use promotion_seeder::SeedPromotionSeeder;
 
 // ============================================================================

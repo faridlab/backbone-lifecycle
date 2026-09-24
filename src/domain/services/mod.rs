@@ -8,6 +8,8 @@ pub mod final_settlement_domain_policy;
 pub mod offboarding_domain_policy;
 pub mod onboarding_domain_policy;
 pub mod onboarding_task_domain_policy;
+pub mod onboarding_template_domain_policy;
+pub mod onboarding_template_task_domain_policy;
 pub mod promotion_domain_policy;
 
 pub use clearance_item_domain_policy::ClearanceItemDomainPolicy;
@@ -16,6 +18,8 @@ pub use final_settlement_domain_policy::FinalSettlementDomainPolicy;
 pub use offboarding_domain_policy::OffboardingDomainPolicy;
 pub use onboarding_domain_policy::OnboardingDomainPolicy;
 pub use onboarding_task_domain_policy::OnboardingTaskDomainPolicy;
+pub use onboarding_template_domain_policy::OnboardingTemplateDomainPolicy;
+pub use onboarding_template_task_domain_policy::OnboardingTemplateTaskDomainPolicy;
 pub use promotion_domain_policy::PromotionDomainPolicy;
 
 // <<< CUSTOM

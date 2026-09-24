@@ -10,6 +10,8 @@ mod final_settlement_repository;
 mod offboarding_repository;
 mod onboarding_repository;
 mod onboarding_task_repository;
+mod onboarding_template_repository;
+mod onboarding_template_task_repository;
 mod promotion_repository;
 
 // Custom persistence modules
@@ -23,6 +25,8 @@ pub use final_settlement_repository::FinalSettlementRepository;
 pub use offboarding_repository::OffboardingRepository;
 pub use onboarding_repository::OnboardingRepository;
 pub use onboarding_task_repository::OnboardingTaskRepository;
+pub use onboarding_template_repository::OnboardingTemplateRepository;
+pub use onboarding_template_task_repository::OnboardingTemplateTaskRepository;
 pub use promotion_repository::PromotionRepository;
 
 // Re-export backbone-orm types

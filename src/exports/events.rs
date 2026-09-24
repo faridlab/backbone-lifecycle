@@ -173,6 +173,60 @@ pub struct OnboardingTaskDeletedEvent {
 }
 
 // ============================================================================
+// ONBOARDINGTEMPLATE EVENTS
+// ============================================================================
+
+/// Event published when a OnboardingTemplate is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateCreatedEvent {
+    pub id: OnboardingTemplateId,
+    pub data: OnboardingTemplateDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a OnboardingTemplate is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateUpdatedEvent {
+    pub id: OnboardingTemplateId,
+    pub data: OnboardingTemplateDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a OnboardingTemplate is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateDeletedEvent {
+    pub id: OnboardingTemplateId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// ONBOARDINGTEMPLATETASK EVENTS
+// ============================================================================
+
+/// Event published when a OnboardingTemplateTask is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskCreatedEvent {
+    pub id: OnboardingTemplateTaskId,
+    pub data: OnboardingTemplateTaskDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a OnboardingTemplateTask is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskUpdatedEvent {
+    pub id: OnboardingTemplateTaskId,
+    pub data: OnboardingTemplateTaskDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a OnboardingTemplateTask is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingTemplateTaskDeletedEvent {
+    pub id: OnboardingTemplateTaskId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
 // PROMOTION EVENTS
 // ============================================================================
 
@@ -225,6 +279,12 @@ pub enum LifecycleEvent {
     OnboardingTaskCreated(OnboardingTaskCreatedEvent),
     OnboardingTaskUpdated(OnboardingTaskUpdatedEvent),
     OnboardingTaskDeleted(OnboardingTaskDeletedEvent),
+    OnboardingTemplateCreated(OnboardingTemplateCreatedEvent),
+    OnboardingTemplateUpdated(OnboardingTemplateUpdatedEvent),
+    OnboardingTemplateDeleted(OnboardingTemplateDeletedEvent),
+    OnboardingTemplateTaskCreated(OnboardingTemplateTaskCreatedEvent),
+    OnboardingTemplateTaskUpdated(OnboardingTemplateTaskUpdatedEvent),
+    OnboardingTemplateTaskDeleted(OnboardingTemplateTaskDeletedEvent),
     PromotionCreated(PromotionCreatedEvent),
     PromotionUpdated(PromotionUpdatedEvent),
     PromotionDeleted(PromotionDeletedEvent),

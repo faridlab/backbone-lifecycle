@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-employee"
-version = "0.2.20"
+version = "0.2.23"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-lifecycle"
-version = "0.3.17"
+version = "0.3.18"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-payroll"
-version = "0.3.23"
+version = "0.3.27"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-timeoff"
-version = "0.4.18"
+version = "0.4.20"
 dependencies = [
  "anyhow",
  "async-trait",

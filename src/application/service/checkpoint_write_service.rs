@@ -40,6 +40,12 @@ pub enum CheckpointError {
     /// A database failure.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
+    /// No onboarding task exists for the given id in the caller's scope.
+    #[error("onboarding task {0} not found")]
+    TaskNotFound(Uuid),
+    /// A resolution verb named something other than done/skipped/blocked.
+    #[error("invalid task resolution: {0}")]
+    InvalidTaskResolution(String),
 }
 
 impl CheckpointError {
@@ -50,6 +56,8 @@ impl CheckpointError {
             CheckpointError::OffboardingNotFound(_) => "offboarding_not_found",
             CheckpointError::ActivitySeamUnwired => "activity_seam_unwired",
             CheckpointError::ActivityFailed(_) => "activity_scheduling_failed",
+            CheckpointError::TaskNotFound(_) => "task_not_found",
+            CheckpointError::InvalidTaskResolution(_) => "invalid_task_resolution",
             CheckpointError::Db(_) => "internal_error",
         }
     }
@@ -57,7 +65,10 @@ impl CheckpointError {
     pub fn http_status(&self) -> u16 {
         match self {
             CheckpointError::OnboardingNotFound(_) | CheckpointError::OffboardingNotFound(_) => 404,
-            CheckpointError::ActivitySeamUnwired | CheckpointError::ActivityFailed(_) => 422,
+            CheckpointError::TaskNotFound(_) => 404,
+            CheckpointError::ActivitySeamUnwired
+            | CheckpointError::ActivityFailed(_)
+            | CheckpointError::InvalidTaskResolution(_) => 422,
             CheckpointError::Db(_) => 500,
         }
     }
@@ -169,6 +180,75 @@ impl OnboardingTaskWriteService {
                 .await?;
         }
         Ok(id)
+    }
+    /// Resolve one onboarding task — the verb that records WHO finished it.
+    ///
+    /// `resolution` is `done` (the step happened), `skipped` (deliberately
+    /// not applicable) or `blocked` (cannot proceed; flags the checklist).
+    /// Only a `pending` or `blocked` task may move — a terminal task answers
+    /// `Ok(false)` (idempotent on the row's own state). The actor and the
+    /// moment land in the row's metadata (`resolved_by` / `resolved_at` /
+    /// `resolution`), the audit columns the table already carries.
+    pub async fn resolve_task(
+        &self,
+        task_id: Uuid,
+        resolution: &'static str,
+        actor: Option<Uuid>,
+    ) -> Result<bool, CheckpointError> {
+        if !matches!(resolution, "done" | "skipped" | "blocked") {
+            return Err(CheckpointError::InvalidTaskResolution(resolution.to_string()));
+        }
+        let mut tx = self.pool.begin().await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
+        let status: Option<String> = sqlx::query_scalar(
+            "SELECT status::text FROM lifecycle.onboarding_tasks WHERE id = $1 FOR UPDATE",
+        )
+        .bind(task_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(status) = status else {
+            tx.rollback().await?;
+            return Err(CheckpointError::TaskNotFound(task_id));
+        };
+        if status == "done" || status == "skipped" {
+            // Terminal: nothing to record, and saying so is not an error.
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        sqlx::query(
+            r#"UPDATE lifecycle.onboarding_tasks
+                  SET status = $2::lifecycle.task_status,
+                      metadata = metadata
+                          || jsonb_build_object(
+                                 'resolution', to_jsonb($2::text),
+                                 'resolved_at', to_jsonb(now()),
+                                 'resolved_by', to_jsonb($3))
+                WHERE id = $1"#,
+        )
+        .bind(task_id)
+        .bind(resolution)
+        .bind(actor)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    /// How many of an onboarding's tasks are still open (`pending` or
+    /// `blocked`). Zero means the checklist is complete — the caller's
+    /// auto-complete policy may then fire the onboarding's own verb.
+    pub async fn open_task_count(&self, onboarding_id: Uuid) -> Result<i64, CheckpointError> {
+        let count = sqlx::query_scalar(
+            r#"SELECT count(*) FROM lifecycle.onboarding_tasks
+                WHERE onboarding_id = $1 AND status IN ('pending', 'blocked')"#,
+        )
+        .bind(onboarding_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(0);
+        Ok(count)
     }
 }
 

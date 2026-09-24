@@ -488,6 +488,58 @@ async fn mark_paid_final_settlement(
     }
 }
 
+/// Resolve one onboarding task (complete / skip / block) — the verb that
+/// records who moved the step. The body is optional; `actor_id` names the
+/// resolver when the caller knows it (the self lane sends the employee).
+async fn resolve_task(
+    State(svc): State<Arc<OnboardingTaskWriteService>>,
+    _org: OrgContext,
+    Path(task_id): Path<Uuid>,
+    resolution: &'static str,
+    b: Option<Json<ResolveTaskBody>>,
+) -> axum::response::Response {
+    let actor = b.and_then(|Json(b)| b.actor_id);
+    match svc.resolve_task(task_id, resolution, actor).await {
+        Ok(true) => (StatusCode::OK, Json(serde_json::json!({ "ok": true }))).into_response(),
+        // Idempotent: the task was already terminal.
+        Ok(false) => (StatusCode::OK, Json(serde_json::json!({ "ok": false }))).into_response(),
+        Err(e) => err_response("task_resolution_failed", 409, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct ResolveTaskBody {
+    #[serde(default)]
+    actor_id: Option<Uuid>,
+}
+
+async fn resolve_task_done(
+    state: State<Arc<OnboardingTaskWriteService>>,
+    org: OrgContext,
+    path: Path<Uuid>,
+    b: Option<Json<ResolveTaskBody>>,
+) -> axum::response::Response {
+    resolve_task(state, org, path, "done", b).await
+}
+
+async fn resolve_task_skipped(
+    state: State<Arc<OnboardingTaskWriteService>>,
+    org: OrgContext,
+    path: Path<Uuid>,
+    b: Option<Json<ResolveTaskBody>>,
+) -> axum::response::Response {
+    resolve_task(state, org, path, "skipped", b).await
+}
+
+async fn resolve_task_blocked(
+    state: State<Arc<OnboardingTaskWriteService>>,
+    org: OrgContext,
+    path: Path<Uuid>,
+    b: Option<Json<ResolveTaskBody>>,
+) -> axum::response::Response {
+    resolve_task(state, org, path, "blocked", b).await
+}
+
 // ── Composition ─────────────────────────────────────────────────────────────────
 
 /// The verb routes (state-machine writes). Combined with read-only CRUD for
@@ -523,12 +575,19 @@ fn create_lifecycle_verb_routes(
         // Nested under the parent workflow: the flat collection POSTs belong to
         // the generic checkpoint write surface merged alongside this router.
         .route("/onboardings/:id/tasks", post(create_onboarding_task))
-        .with_state(tasks)
+        .merge(
+            Router::new()
+                .route("/onboarding-tasks/:id/complete", post(resolve_task_done))
+                .route("/onboarding-tasks/:id/skip", post(resolve_task_skipped))
+                .route("/onboarding-tasks/:id/block", post(resolve_task_blocked))
+                .with_state(tasks.clone()),
+        )
         .merge(
             Router::new()
                 .route("/offboardings/:id/clearance_items", post(create_clearance_item))
                 .with_state(clearance),
-        );
+        )
+        .with_state(tasks);
 
     let settlements = Router::new()
         .route("/final_settlements/draft", post(draft_final_settlement))

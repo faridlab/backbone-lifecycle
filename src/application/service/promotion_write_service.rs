@@ -369,6 +369,29 @@ impl PromotionWriteService {
     /// non-effective status is a [`PromotionEffectError::NotApproved`], and a future `effective_date`
     /// is a [`PromotionEffectError::NotYetEffective`]. The composing service's request scope bounds the
     /// whole path — a promotion id from outside it reads as [`PromotionEffectError::NotFound`].
+    /// Mirror a Rejected verdict onto the promotion row. Only a `pending`
+    /// promotion may be rejected (idempotent on an already-terminal row);
+    /// nothing downstream fires because an effective promotion never
+    /// existed.
+    pub async fn reject(
+        &self,
+        promotion_id: Uuid,
+    ) -> Result<bool, PromotionEffectError> {
+        let mut tx = self.pool.begin().await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
+        let updated = sqlx::query(
+            "UPDATE lifecycle.promotions SET status = 'rejected' \
+             WHERE id = $1 AND status = 'pending'",
+        )
+        .bind(promotion_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(updated.rows_affected() > 0)
+    }
+
     pub async fn effect(
         &self,
         promotion_id: Uuid,

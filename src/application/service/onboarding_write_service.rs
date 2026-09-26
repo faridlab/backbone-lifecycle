@@ -135,6 +135,12 @@ pub struct OnboardingWriteService {
 }
 
 impl OnboardingWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     /// Create a new write-service bound to the given pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -155,7 +161,7 @@ impl OnboardingWriteService {
     /// from the auth context, never the body). Returns the new onboarding id.
     /// `probation_end_date` is the confirmation gate [`Self::confirm`] enforces later.
     pub async fn create(&self, input: NewOnboarding) -> Result<Uuid, OnboardingCompleteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // rows a deployment's fence decorates are invisible to an unscoped connection.
         // Unfenced deployments have no ambient scope and skip this entirely.
@@ -256,7 +262,7 @@ impl OnboardingWriteService {
         // employee consumer reads `company_id`), so fail closed before touching the DB.
         let company_id = Self::legacy_company_id()?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // a row from another unit is invisible under the composing fence (a cross-scope id
         // reads as NotFound, never as a mutable target).
@@ -379,7 +385,7 @@ impl OnboardingWriteService {
         // The outbox record and payload are company-keyed; fail closed before touching the DB.
         let company_id = Self::legacy_company_id()?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }

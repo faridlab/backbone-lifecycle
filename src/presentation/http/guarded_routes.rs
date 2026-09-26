@@ -801,6 +801,12 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
     };
 
     Router::new()
+        // Bind the composer's request pool (ADR-0029 pool law) for every
+        // verb below: under a tenant mount the writes go to the tenant's
+        // database; without one the composed pool stays the fallback.
+        .layer(axum::middleware::from_fn(
+            crate::request_pool::bind_request_pool,
+        ))
         // Safe base: GET-only for all seven entities.
         .merge(m.readonly_routes())
         // Checkpoint rows keep generic writes — they are operator checklist data. The

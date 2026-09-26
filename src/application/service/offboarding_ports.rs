@@ -63,6 +63,12 @@ pub struct PoolOffboardingInputs {
 }
 
 impl PoolOffboardingInputs {
+    /// The database this read runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     /// Create a new pool-backed inputs reader.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -98,7 +104,7 @@ impl PoolOffboardingInputs {
 
         let scope = org_scope::current_org_scope()
             .unwrap_or_else(|| OrgScope::for_company_unit(company));
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         org_scope::bind_org_scope_on(&mut tx, &scope).await?;
         let out = query.fetch_optional(&mut *tx).await?;
         tx.commit().await?;

@@ -111,6 +111,12 @@ pub struct OnboardingTaskWriteService {
 }
 
 impl OnboardingTaskWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool, activities: Arc<dyn ActivitySink>) -> Self {
         Self {
             pool,
@@ -135,7 +141,7 @@ impl OnboardingTaskWriteService {
             return Err(CheckpointError::ActivitySeamUnwired);
         }
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // rows a deployment's fence decorates are invisible to an unscoped connection.
         // Unfenced deployments have no ambient scope and skip this entirely.
@@ -230,7 +236,7 @@ impl OnboardingTaskWriteService {
         if !matches!(resolution, "done" | "skipped" | "blocked") {
             return Err(CheckpointError::InvalidTaskResolution(resolution.to_string()));
         }
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }
@@ -277,7 +283,7 @@ impl OnboardingTaskWriteService {
                 WHERE onboarding_id = $1 AND status IN ('pending', 'blocked')"#,
         )
         .bind(onboarding_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.rpool())
         .await?
         .unwrap_or(0);
         Ok(count)
@@ -291,6 +297,12 @@ pub struct ClearanceItemWriteService {
 }
 
 impl ClearanceItemWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool, activities: Arc<dyn ActivitySink>) -> Self {
         Self { pool, activities }
     }
@@ -307,7 +319,7 @@ impl ClearanceItemWriteService {
             return Err(CheckpointError::ActivitySeamUnwired);
         }
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }

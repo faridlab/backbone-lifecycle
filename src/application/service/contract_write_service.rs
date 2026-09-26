@@ -137,6 +137,12 @@ pub struct ContractWriteService {
 }
 
 impl ContractWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
@@ -185,7 +191,7 @@ impl ContractWriteService {
             }
         }
         let id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         // The chain's cumulative ledger starts with this row's own term.
         let cumulative = n
@@ -233,7 +239,7 @@ impl ContractWriteService {
         new_end_date: Option<NaiveDate>,
     ) -> Result<Uuid, ContractError> {
         let port = self.approvals.read().expect("contract approvals lock poisoned").clone();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         use sqlx::Row;
         let row = sqlx::query(
@@ -313,7 +319,7 @@ impl ContractWriteService {
         outcome: ContractDecision,
         new_end_date: Option<NaiveDate>,
     ) -> Result<Option<Uuid>, ContractError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         use sqlx::Row;
         let row = sqlx::query(
@@ -441,7 +447,7 @@ impl ContractWriteService {
     /// The dispatcher's REFUSED arm: the decision dies, the contract stays
     /// active (the row was never touched by the filing).
     pub async fn refuse_decision(&self, contract_id: Uuid) -> Result<(), ContractError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         let moved = sqlx::query(
             "UPDATE lifecycle.contracts SET status = 'active' \
@@ -463,7 +469,7 @@ impl ContractWriteService {
     /// The reminder tick: active PKWT contracts inside the window, reminded
     /// once (the watermark). Emits `lifecycle.contract.expiring` per row.
     pub async fn remind_due(&self, now: DateTime<Utc>, days: i32) -> Result<Vec<Uuid>, ContractError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         let rows: Vec<(Uuid, Uuid, NaiveDate)> = sqlx::query_as(
             r#"SELECT id, employee_id, end_date FROM lifecycle.contracts

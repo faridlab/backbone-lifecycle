@@ -188,6 +188,12 @@ pub struct FinalSettlementWriteService {
 }
 
 impl FinalSettlementWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     /// Create a new write-service bound to the given pool, inputs port, config, and GL sink.
     pub fn new(
         pool: PgPool,
@@ -266,7 +272,7 @@ impl FinalSettlementWriteService {
         // (employee / payroll / timeoff), so fail closed before touching the DB.
         let company_id = Self::legacy_company_id()?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // a row from another unit is invisible under the composing fence (a cross-scope id
         // reads as NotFound, never as a source of truth).
@@ -416,7 +422,7 @@ impl FinalSettlementWriteService {
         // stripped), so fail closed before touching the DB.
         let company_id = Self::legacy_company_id()?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }
@@ -568,7 +574,7 @@ impl FinalSettlementWriteService {
     /// owns the transfer, and an operator can call it when the transfer left
     /// by another rail.
     pub async fn mark_paid(&self, settlement_id: Uuid) -> Result<Option<()>, FinalSettlementError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
         }

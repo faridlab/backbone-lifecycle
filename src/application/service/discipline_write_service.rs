@@ -114,6 +114,12 @@ pub struct DisciplineWriteService {
 }
 
 impl DisciplineWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
@@ -162,7 +168,7 @@ impl DisciplineWriteService {
         }
 
         let id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         // The issue-time ladder snapshot (evidence, not enforcement).
         let (prior_sp1, prior_sp2): (i32, i32) = sqlx::query(
@@ -215,7 +221,7 @@ impl DisciplineWriteService {
     /// The employee acknowledges (self lane). Acknowledgement is metadata,
     /// never a validity gate — this only stamps the channel and the moment.
     pub async fn acknowledge(&self, record_id: Uuid, employee_id: Uuid) -> Result<(), DisciplineError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         let moved = sqlx::query(
             r#"UPDATE lifecycle.discipline_records
@@ -247,7 +253,7 @@ impl DisciplineWriteService {
         }
         let port = self.approvals.read().expect("discipline approvals lock poisoned").clone();
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         use sqlx::Row;
         let row = sqlx::query(
@@ -328,7 +334,7 @@ impl DisciplineWriteService {
         to: &str,
         reason: Option<&str>,
     ) -> Result<(), DisciplineError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         let exists: Option<String> = sqlx::query_scalar(
             "SELECT status::text FROM lifecycle.discipline_records WHERE id = $1",

@@ -175,6 +175,12 @@ pub struct OffboardingWriteService {
 }
 
 impl OffboardingWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     /// Create a new write-service bound to the given pool, inputs port, and pesangon config.
     pub fn new(pool: PgPool, inputs: Arc<dyn OffboardingInputs>, cfg: PesangonConfig) -> Self {
         Self {
@@ -222,7 +228,7 @@ impl OffboardingWriteService {
     /// verb gates the move to `cleared`; `close` (the compound-event producer) only runs on
     /// a cleared row.
     pub async fn create(&self, input: NewOffboarding) -> Result<Uuid, OffboardingCloseError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // rows a deployment's fence decorates are invisible to an unscoped connection.
         // Unfenced deployments have no ambient scope and skip this entirely.
@@ -302,7 +308,7 @@ impl OffboardingWriteService {
     /// - `Ok(false)` if the offboarding was already `cleared` or `closed` (idempotent no-op).
     /// - [`OffboardingCloseError::NotInProgress`] for any other status.
     pub async fn clear(&self, offboarding_id: Uuid) -> Result<bool, OffboardingCloseError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }
@@ -396,7 +402,7 @@ impl OffboardingWriteService {
         // sibling schemas — all fail closed when no ambient scope carries a company.
         let company_id = Self::legacy_company_id()?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // a row from another unit is invisible under the composing fence (a cross-scope id
         // reads as NotFound, never as a mutable target).

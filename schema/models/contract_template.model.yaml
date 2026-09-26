@@ -1,0 +1,36 @@
+# =============================================================================
+# Domain: Lifecycle
+# Entity: ContractTemplate
+# Description: A contract letter template (the offer-letter-template pattern):
+# name, contract kind, and a body carrying {{placeholders}} the create verb
+# renders per employment. Master data — full generic writes stay mounted.
+# =============================================================================
+
+models:
+  - name: ContractTemplate
+    collection: contract_templates
+    description: "A contract letter template with {{placeholders}}"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique template id"
+      name:
+        type: string
+        attributes: ["@required", "@length(max=150)"]
+        description: "Template name (master data)"
+      contract_type:
+        type: ContractType
+        attributes: ["@required"]
+        description: "Which contract kind this template renders"
+      body_template:
+        type: string
+        attributes: ["@required", "@length(max=20000)"]
+        description: "The letter body with {{placeholders}} (company, employee, position, dates, salary only when explicitly included)"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: index
+        fields: [contract_type]

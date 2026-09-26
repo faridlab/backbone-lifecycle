@@ -90,6 +90,9 @@ pub struct LifecycleModule {
     /// derived-expiry predicate. The contest approvals port and the issued
     /// event sink are unwired by default (fail-closed / log-only).
     pub discipline_write_service: Arc<application::service::DisciplineWriteService>,
+    /// Employment contracts: create, the decision verb (through the
+    /// approvals port), the dispatcher arms, the reminder tick.
+    pub contract_write_service: Arc<application::service::ContractWriteService>,
     // END CUSTOM
 }
 
@@ -341,6 +344,8 @@ impl LifecycleModuleBuilder {
             ));
         let discipline_write_service =
             Arc::new(application::service::DisciplineWriteService::new(db_pool.clone()));
+        let contract_write_service =
+            Arc::new(application::service::ContractWriteService::new(db_pool.clone()));
         // END CUSTOM
 
         Ok(LifecycleModule {
@@ -361,6 +366,7 @@ impl LifecycleModuleBuilder {
             clearance_item_write_service,
             final_settlement_write_service,
             discipline_write_service,
+            contract_write_service,
             // END CUSTOM
         })
     }

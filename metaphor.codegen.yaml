@@ -28,6 +28,9 @@ user_owned:
   # Discipline records (SP1-SP3): valid on service, derived expiry, contest port.
   - "src/application/service/discipline_write_service.rs"
   - "src/application/service/discipline_events.rs"
+  # Employment contracts (PKWT/PKWTT): the decision verb + the reminder tick.
+  - "src/application/service/contract_write_service.rs"
+  - "src/application/service/contract_events.rs"
   # The guarded HTTP composition (read-only CRUD + validated verbs) — the recommended mount.
   - "src/presentation/http/guarded_routes.rs"
 

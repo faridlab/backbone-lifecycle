@@ -535,6 +535,96 @@ async fn cancel_discipline(
     }
 }
 
+
+// ── Employment contracts (PKWT/PKWTT) ────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct CreateContractBody {
+    employment_id: Uuid,
+    employee_id: Uuid,
+    /// "pkwtt" | "pkwt"
+    contract_type: String,
+    #[serde(default)]
+    contract_no: Option<String>,
+    start_date: NaiveDate,
+    #[serde(default)]
+    end_date: Option<NaiveDate>,
+    #[serde(default)]
+    document_file_id: Option<Uuid>,
+    #[serde(default)]
+    template_id: Option<Uuid>,
+}
+
+async fn create_contract(
+    State(svc): State<Arc<crate::application::service::ContractWriteService>>,
+    org: OrgContext,
+    Json(b): Json<CreateContractBody>,
+) -> axum::response::Response {
+    match svc
+        .create(crate::application::service::NewContract {
+            employment_id: b.employment_id,
+            employee_id: b.employee_id,
+            contract_type: b.contract_type,
+            contract_no: b.contract_no,
+            start_date: b.start_date,
+            end_date: b.end_date,
+            document_file_id: b.document_file_id,
+            template_id: b.template_id,
+            created_by: Uuid::parse_str(&org.user_id).ok(),
+        })
+        .await
+    {
+        Ok(id) => (StatusCode::CREATED, Json(IdResponse { id })).into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FileDecisionBody {
+    /// "renew" | "convert" | "end"
+    outcome: String,
+    #[serde(default)]
+    new_end_date: Option<NaiveDate>,
+}
+
+async fn file_contract_decision(
+    State(svc): State<Arc<crate::application::service::ContractWriteService>>,
+    _org: OrgContext,
+    Path(contract_id): Path<Uuid>,
+    Json(b): Json<FileDecisionBody>,
+) -> axum::response::Response {
+    let Some(outcome) = crate::application::service::ContractDecision::parse(&b.outcome) else {
+        return err_response(
+            "invalid_input",
+            422,
+            "outcome must be renew, convert or end".to_string(),
+        );
+    };
+    match svc.file_decision(contract_id, outcome, b.new_end_date).await {
+        Ok(request_id) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({ "approvalRequestId": request_id, "status": "decision_pending" })),
+        )
+            .into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
+/// The reminder tick's manual twin (the scheduler runs this on cadence).
+async fn run_contract_reminders(
+    State(svc): State<Arc<crate::application::service::ContractWriteService>>,
+    _org: OrgContext,
+) -> axum::response::Response {
+    match svc.remind_due(Utc::now(), 30).await {
+        Ok(ids) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "reminded": ids.len() })),
+        )
+            .into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
 /// Mark a confirmed settlement paid — the remittance acknowledgement.
 async fn mark_paid_final_settlement(
     State(svc): State<Arc<FinalSettlementWriteService>>,
@@ -614,6 +704,7 @@ fn create_lifecycle_verb_routes(
     clearance: Arc<ClearanceItemWriteService>,
     settlements: Arc<FinalSettlementWriteService>,
     discipline_svc: Arc<crate::application::service::DisciplineWriteService>,
+    contracts_svc: Arc<crate::application::service::ContractWriteService>,
 ) -> Router {
     let onboardings = Router::new()
         .route("/onboardings", post(create_onboarding))
@@ -668,6 +759,14 @@ fn create_lifecycle_verb_routes(
         .route("/discipline-records/:id/cancel", post(cancel_discipline))
         .with_state(discipline_svc);
 
+    // Contracts: create + the ONE decision verb (the outcome applies on the
+    // approved verdict; the dispatcher arms drive it).
+    let contracts = Router::new()
+        .route("/contracts", post(create_contract))
+        .route("/contracts/:id/file-decision", post(file_contract_decision))
+        .route("/contracts/remind-due", post(run_contract_reminders))
+        .with_state(contracts_svc);
+
     Router::new()
         .merge(onboardings)
         .merge(promotions)
@@ -675,6 +774,7 @@ fn create_lifecycle_verb_routes(
         .merge(checkpoints)
         .merge(settlements)
         .merge(discipline)
+        .merge(contracts)
 }
 
 /// Mount the lifecycle module with write paths locked to validated verbs.
@@ -733,6 +833,7 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
             m.clearance_item_write_service.clone(),
             m.final_settlement_write_service.clone(),
             m.discipline_write_service.clone(),
+            m.contract_write_service.clone(),
         ))
 }
 

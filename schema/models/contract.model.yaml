@@ -1,0 +1,106 @@
+# =============================================================================
+# Domain: Lifecycle
+# Entity: Contract
+# Description: One employment contract — PKWTT (indefinite) or PKWT (fixed-term,
+# UU 11/2020). The renewal chain rides previous_contract_id; the cumulative
+# PKWT duration column tracks the 5-year statutory cap. The DECISION verb
+# (renew / convert / end) files into the approvals engine (resource type
+# `contract`); `end` opens an offboarding with reason end_of_contract, whose
+# pesangon rule is already built. This record is the LOAD-BEARING truth the
+# employment columns project from (council 2026-09-26: the record-change lane
+# is the only write path for employment_status / end_join_date).
+# =============================================================================
+
+models:
+  - name: Contract
+    collection: contracts
+    description: "One employment contract: PKWTT indefinite or PKWT fixed-term, chained across renewals"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique contract id"
+      employment_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The employment this contract governs # logical FK to employee.Employment.id"
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The contracting employee # logical FK to employee.Employee.id"
+      contract_type:
+        type: ContractType
+        attributes: ["@required"]
+        description: "pkwtt (indefinite) or pkwt (fixed-term)"
+      contract_no:
+        type: string?
+        attributes: ["@length(max=60)"]
+        description: "The document number, when the letter carries one"
+      start_date:
+        type: date
+        attributes: ["@required"]
+        description: "The contract's first day"
+      end_date:
+        type: date?
+        description: "The last day (NULL = indefinite, PKWTT)"
+      status:
+        type: ContractStatus
+        attributes: ["@required", "@default(active)"]
+        description: "active → decision_pending → superseded | ended; expired derived at read"
+      document_file_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The rendered contract document # logical FK to the bucket file"
+      template_id:
+        type: uuid?
+        attributes: ["@foreign_key(ContractTemplate.id)"]
+        description: "The template rendered # FK to ContractTemplate.id"
+      previous_contract_id:
+        type: uuid?
+        attributes: ["@foreign_key(Contract.id)"]
+        description: "The contract this one renews or converts # FK to Contract.id"
+      cumulative_pkwt_months:
+        type: int
+        attributes: ["@default(0)"]
+        description: "Cumulative PKWT months across the chain (incl. this row) — the 5-year cap's ledger"
+      reminder_sent_at:
+        type: datetime?
+        description: "The expiry reminder's once-only watermark (NULL = not yet reminded)"
+      created_by:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The author # logical FK to public.users.id"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      # One ACTIVE contract per employment — the renewal chain's invariant.
+      - type: unique
+        fields: [employment_id]
+        where: "status = 'active'"
+      - type: index
+        fields: [employee_id, status]
+
+enums:
+  - name: ContractType
+    description: "Indonesian employment contract kinds"
+    variants:
+      - name: pkwtt
+        description: "Permanent (indefinite) employment contract"
+        default: true
+      - name: pkwt
+        description: "Fixed-term employment contract (UU 11/2020: 5-year cumulative cap)"
+
+  - name: ContractStatus
+    description: "Contract lifecycle. No expired variant: expiry is derived (end_date < today AND status = active)"
+    variants:
+      - name: active
+        description: "Current governing contract"
+        default: true
+      - name: decision_pending
+        description: "A renew/convert/end decision is open in the approvals engine"
+      - name: superseded
+        description: "Replaced by a renewal or conversion (the chain continues)"
+      - name: ended
+        description: "Ended (the end decision applied; the offboarding carries the exit)"

@@ -91,6 +91,9 @@ pub enum OffboardingCloseError {
     #[error("invalid offboarding reason '{0}'")]
     BadReason(String),
     /// The pesangon calc rejected the reason (unknown to the config's `reason_rules`).
+    /// A precondition this module refuses on (the seam-closure guard).
+    #[error("{0}")]
+    Invalid(String),
     #[error("pesangon calc: {0}")]
     Pesangon(#[from] crate::application::service::pesangon::PesangonError),
     /// A write that must hand a company id to a still-company-keyed sibling seam (the
@@ -120,6 +123,7 @@ impl OffboardingCloseError {
             OffboardingCloseError::MissingJoinDate { .. } => "missing_join_date",
             OffboardingCloseError::MissingSalary { .. } => "missing_salary",
             OffboardingCloseError::BadReason(_) => "invalid_offboarding_reason",
+            OffboardingCloseError::Invalid(_) => "offboarding_refused",
             OffboardingCloseError::Pesangon(_) => "pesangon_calc_error",
             OffboardingCloseError::NoCompanyScope => "no_company_scope",
             OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => "internal_error",
@@ -132,6 +136,7 @@ impl OffboardingCloseError {
             OffboardingCloseError::NotCleared { .. }
             | OffboardingCloseError::NotInProgress { .. }
             | OffboardingCloseError::ClearanceOpen { .. }
+            | OffboardingCloseError::Invalid(_)
             | OffboardingCloseError::MissingJoinDate { .. }
             | OffboardingCloseError::MissingSalary { .. }
             | OffboardingCloseError::BadReason(_)
@@ -210,6 +215,30 @@ impl OffboardingWriteService {
         // Unfenced deployments have no ambient scope and skip this entirely.
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
+
+        // The seam-closure guard (council 2026-09-26): an end_of_contract
+        // exit is only lawful behind a fixed-term contract — the pesangon
+        // calc zeroes severance on this reason, so a freely chosen label
+        // with no PKWT row behind it forfeits real money silently. Same
+        // schema, direct read.
+        if input.reason == Some("end_of_contract".to_string()) {
+            let pkwt: Option<i64> = sqlx::query_scalar(
+                r#"SELECT 1 FROM lifecycle.contracts
+                    WHERE employee_id = $1 AND contract_type = 'pkwt'
+                      AND status IN ('active', 'decision_pending')
+                      AND (metadata->>'deleted_at') IS NULL
+                    LIMIT 1"#,
+            )
+            .bind(input.employee_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if pkwt.is_none() {
+                tx.rollback().await?;
+                return Err(OffboardingCloseError::Invalid(
+                    "an end_of_contract offboarding needs an active PKWT contract behind it — file the contract decision first".to_string(),
+                ));
+            }
         }
 
         let id = Uuid::new_v4();

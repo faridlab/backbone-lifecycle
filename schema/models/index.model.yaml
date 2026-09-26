@@ -77,3 +77,5 @@ imports:
   - final_settlement.model.yaml
   - promotion.model.yaml
   - discipline_record.model.yaml
+  - contract.model.yaml
+  - contract_template.model.yaml

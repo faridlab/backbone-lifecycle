@@ -43,6 +43,10 @@ pub mod final_settlement_write_service;
 // employee's contest through the optional approvals port.
 pub mod discipline_write_service;
 pub mod discipline_events;
+// Employment contracts (PKWT/PKWTT): the decision verb through the approvals
+// port, the reminder tick, and the expiry events.
+pub mod contract_write_service;
+pub mod contract_events;
 // END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
@@ -82,4 +86,9 @@ pub use discipline_write_service::{
     NewDisciplineRecord, ACTIVE_PREDICATE,
 };
 pub use discipline_events::{DisciplineEvent, DisciplineEventSink, LoggingSink as DisciplineLoggingSink};
+pub use contract_write_service::{
+    ContractApprovalsPort, ContractDecision, ContractDecisionFiling, ContractError,
+    ContractWriteService, NewContract, PKWT_CAP_MONTHS,
+};
+pub use contract_events::{ContractEvent, ContractEventSink, LoggingSink as ContractLoggingSink};
 // END CUSTOM

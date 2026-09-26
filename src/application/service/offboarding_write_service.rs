@@ -171,12 +171,25 @@ pub struct OffboardingWriteService {
     pool: PgPool,
     inputs: Arc<dyn OffboardingInputs>,
     cfg: PesangonConfig,
+    events: std::sync::RwLock<std::sync::Arc<dyn super::lifecycle_events::LifecycleEventSink>>,
 }
 
 impl OffboardingWriteService {
     /// Create a new write-service bound to the given pool, inputs port, and pesangon config.
     pub fn new(pool: PgPool, inputs: Arc<dyn OffboardingInputs>, cfg: PesangonConfig) -> Self {
-        Self { pool, inputs, cfg }
+        Self {
+            pool,
+            inputs,
+            cfg,
+            events: std::sync::RwLock::new(std::sync::Arc::new(
+                super::lifecycle_events::LoggingSink,
+            )),
+        }
+    }
+
+    /// Wire the lifecycle event sink (the exit-started notification rides it).
+    pub fn set_event_sink(&self, sink: std::sync::Arc<dyn super::lifecycle_events::LifecycleEventSink>) {
+        *self.events.write().expect("lifecycle events lock poisoned") = sink;
     }
 
     /// Convenience: pool-backed [`OffboardingInputs`] + current-law [`PesangonConfig::default`].
@@ -261,6 +274,17 @@ impl OffboardingWriteService {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
+        // The employee learns their exit process has started (#558's
+        // offboarding-opened arm). Fire-and-forget: the row is committed.
+        self.events
+            .read()
+            .expect("lifecycle events lock poisoned")
+            .clone()
+            .publish(super::lifecycle_events::LifecycleEvent::OffboardingOpened {
+                offboarding_id: id,
+                employee_id: input.employee_id,
+                last_working_day: input.last_working_day,
+            });
         Ok(id)
     }
 

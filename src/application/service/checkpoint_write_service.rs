@@ -107,11 +107,23 @@ const AUDIT_METADATA: &str =
 pub struct OnboardingTaskWriteService {
     pool: PgPool,
     activities: Arc<dyn ActivitySink>,
+    events: std::sync::RwLock<std::sync::Arc<dyn super::lifecycle_events::LifecycleEventSink>>,
 }
 
 impl OnboardingTaskWriteService {
     pub fn new(pool: PgPool, activities: Arc<dyn ActivitySink>) -> Self {
-        Self { pool, activities }
+        Self {
+            pool,
+            activities,
+            events: std::sync::RwLock::new(std::sync::Arc::new(
+                super::lifecycle_events::LoggingSink,
+            )),
+        }
+    }
+
+    /// Wire the lifecycle event sink (the task-assigned notification rides it).
+    pub fn set_event_sink(&self, sink: std::sync::Arc<dyn super::lifecycle_events::LifecycleEventSink>) {
+        *self.events.write().expect("lifecycle events lock poisoned") = sink;
     }
 
     /// Record one onboarding task and optionally schedule the owner's activity.
@@ -134,16 +146,20 @@ impl OnboardingTaskWriteService {
         // The parent onboarding must exist within the bound scope (a fenced
         // deployment makes rows from other units invisible, so a foreign id
         // reads as a missing parent).
-        let parent: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM lifecycle.onboardings WHERE id = $1",
+        let parent: Option<(Uuid, Uuid)> = sqlx::query(
+            "SELECT id, employee_id FROM lifecycle.onboardings WHERE id = $1",
         )
         .bind(input.onboarding_id)
         .fetch_optional(&mut *tx)
-        .await?;
-        if parent.is_none() {
+        .await?
+        .map(|r| {
+            use sqlx::Row;
+            (r.get::<Uuid, _>("id"), r.get::<Uuid, _>("employee_id"))
+        });
+        let Some((_, joiner_employee_id)) = parent else {
             tx.rollback().await?;
             return Err(CheckpointError::OnboardingNotFound(input.onboarding_id));
-        }
+        };
 
         let id = Uuid::new_v4();
         // Captured before the bind moves it — the post-commit activity uses the same text.
@@ -156,7 +172,7 @@ impl OnboardingTaskWriteService {
         )
         .bind(id)
         .bind(input.onboarding_id)
-        .bind(input.title)
+        .bind(input.title.clone())
         .bind(input.category)
         .bind(input.owner_employee_id)
         .bind(input.due_date)
@@ -164,6 +180,22 @@ impl OnboardingTaskWriteService {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
+
+        // The assigned owner learns the task is on their plate (#558's
+        // task-assigned arm) — fired whenever the row names an owner.
+        if let Some(owner_employee_id) = input.owner_employee_id {
+            self.events
+                .read()
+                .expect("lifecycle events lock poisoned")
+                .clone()
+                .publish(super::lifecycle_events::LifecycleEvent::OnboardingTaskAssigned {
+                    task_id: id,
+                    onboarding_id: input.onboarding_id,
+                    employee_id: joiner_employee_id,
+                    owner_employee_id,
+                    title: input.title.clone(),
+                });
+        }
 
         // Notify after commit: the adapter owns its own durability. A failure
         // leaves the task recorded (true state) and is surfaced for retry.

@@ -47,6 +47,8 @@ pub mod discipline_events;
 // port, the reminder tick, and the expiry events.
 pub mod contract_write_service;
 pub mod contract_events;
+// The exit-started and task-assigned events (#558's remaining arms).
+pub mod lifecycle_events;
 // END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
@@ -92,4 +94,5 @@ pub use contract_write_service::{
     ContractWriteService, NewContract, PKWT_CAP_MONTHS,
 };
 pub use contract_events::{ContractEvent, ContractEventSink, LoggingSink as ContractLoggingSink};
+pub use lifecycle_events::{LifecycleEvent, LifecycleEventSink, LoggingSink as LifecycleLoggingSink};
 // END CUSTOM

@@ -78,8 +78,8 @@ pub use final_settlement_write_service::{
     FinalSettlementError, FinalSettlementWriteService, SettlementAccounts, UnwiredGlSink,
 };
 pub use discipline_write_service::{
-    DisciplineApprovalsPort, DisciplineError, DisciplineWriteService, NewDisciplineRecord,
-    ACTIVE_PREDICATE,
+    ContestFiling, DisciplineApprovalsPort, DisciplineError, DisciplineWriteService,
+    NewDisciplineRecord, ACTIVE_PREDICATE,
 };
 pub use discipline_events::{DisciplineEvent, DisciplineEventSink, LoggingSink as DisciplineLoggingSink};
 // END CUSTOM

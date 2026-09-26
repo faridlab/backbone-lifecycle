@@ -63,6 +63,7 @@ pub use pesangon::{
     pesangon, PesangonBreakdown, PesangonConfig, PesangonError, ReasonRule, UpmkScaleStep,
 };
 pub use promotion_write_service::{
+    PromotionValidationPort,
     NewPromotion, PromotionEffectError, PromotionWriteService, PROMOTION_EFFECTIVE_EVENT_TYPE,
 };
 pub use onboarding_write_service::{

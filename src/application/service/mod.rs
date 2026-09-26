@@ -39,6 +39,10 @@ pub mod checkpoint_write_service;
 // Final-settlement draft (idempotent, one per offboarding) + GL confirmation through the shared
 // backbone-gl-posting port (stamp only after accounting acks; unwired default = loud 422).
 pub mod final_settlement_write_service;
+// Discipline records (SP1-SP3): valid on service, expiry derived, the
+// employee's contest through the optional approvals port.
+pub mod discipline_write_service;
+pub mod discipline_events;
 // END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
@@ -73,4 +77,9 @@ pub use checkpoint_write_service::{
 pub use final_settlement_write_service::{
     FinalSettlementError, FinalSettlementWriteService, SettlementAccounts, UnwiredGlSink,
 };
+pub use discipline_write_service::{
+    DisciplineApprovalsPort, DisciplineError, DisciplineWriteService, NewDisciplineRecord,
+    ACTIVE_PREDICATE,
+};
+pub use discipline_events::{DisciplineEvent, DisciplineEventSink, LoggingSink as DisciplineLoggingSink};
 // END CUSTOM

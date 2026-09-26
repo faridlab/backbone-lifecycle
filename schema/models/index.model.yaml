@@ -76,3 +76,4 @@ imports:
   - exit_interview.model.yaml
   - final_settlement.model.yaml
   - promotion.model.yaml
+  - discipline_record.model.yaml

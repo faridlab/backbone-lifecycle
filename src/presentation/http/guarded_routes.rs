@@ -37,7 +37,7 @@ use axum::{
     Json, Router,
 };
 use backbone_auth::org::OrgContext;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -474,6 +474,67 @@ async fn confirm_final_settlement(
     }
 }
 
+
+// ── Discipline records (SP1-SP3) ──────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct IssueDisciplineBody {
+    employee_id: Uuid,
+    /// "sp1" | "sp2" | "sp3"
+    level: String,
+    offense: String,
+    description: String,
+    /// Defaults to +6 months when omitted (the host's sysparam default lives there).
+    #[serde(default)]
+    valid_until: Option<DateTime<Utc>>,
+    /// "delivered" | "witnessed_refusal" — mandatory: the employer's act that
+    /// makes the record valid.
+    served_disposition: String,
+    #[serde(default)]
+    document_file_id: Option<Uuid>,
+}
+
+async fn issue_discipline(
+    State(svc): State<Arc<crate::application::service::DisciplineWriteService>>,
+    org: OrgContext,
+    Json(b): Json<IssueDisciplineBody>,
+) -> axum::response::Response {
+    let valid_until = b.valid_until.unwrap_or_else(|| Utc::now() + chrono::Duration::days(183));
+    match svc
+        .issue(crate::application::service::NewDisciplineRecord {
+            employee_id: b.employee_id,
+            level: b.level,
+            offense: b.offense,
+            description: b.description,
+            valid_until,
+            served_disposition: b.served_disposition,
+            document_file_id: b.document_file_id,
+            issued_by: uuid::Uuid::parse_str(&org.user_id).ok(),
+        })
+        .await
+    {
+        Ok(id) => (StatusCode::CREATED, Json(IdResponse { id })).into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CancelDisciplineBody {
+    reason: String,
+}
+
+async fn cancel_discipline(
+    State(svc): State<Arc<crate::application::service::DisciplineWriteService>>,
+    _org: OrgContext,
+    Path(record_id): Path<Uuid>,
+    Json(b): Json<CancelDisciplineBody>,
+) -> axum::response::Response {
+    match svc.cancel(record_id, b.reason).await {
+        Ok(()) => (StatusCode::OK, Json(OkResponse { ok: true })).into_response(),
+        Err(e) => err_response(e.code(), e.http_status(), e.to_string()),
+    }
+}
+
 /// Mark a confirmed settlement paid — the remittance acknowledgement.
 async fn mark_paid_final_settlement(
     State(svc): State<Arc<FinalSettlementWriteService>>,
@@ -552,6 +613,7 @@ fn create_lifecycle_verb_routes(
     tasks: Arc<OnboardingTaskWriteService>,
     clearance: Arc<ClearanceItemWriteService>,
     settlements: Arc<FinalSettlementWriteService>,
+    discipline_svc: Arc<crate::application::service::DisciplineWriteService>,
 ) -> Router {
     let onboardings = Router::new()
         .route("/onboardings", post(create_onboarding))
@@ -598,12 +660,21 @@ fn create_lifecycle_verb_routes(
         .route("/final_settlements/:id/mark-paid", post(mark_paid_final_settlement))
         .with_state(settlements);
 
+    // Discipline: the HR verbs (issue, cancel). The employee's
+    // acknowledge/contest ride the composing service's self lane (identity
+    // comes from the session there).
+    let discipline = Router::new()
+        .route("/discipline-records", post(issue_discipline))
+        .route("/discipline-records/:id/cancel", post(cancel_discipline))
+        .with_state(discipline_svc);
+
     Router::new()
         .merge(onboardings)
         .merge(promotions)
         .merge(offboardings)
         .merge(checkpoints)
         .merge(settlements)
+        .merge(discipline)
 }
 
 /// Mount the lifecycle module with write paths locked to validated verbs.
@@ -661,6 +732,7 @@ pub fn create_guarded_lifecycle_routes(m: &LifecycleModule) -> Router {
             m.onboarding_task_write_service.clone(),
             m.clearance_item_write_service.clone(),
             m.final_settlement_write_service.clone(),
+            m.discipline_write_service.clone(),
         ))
 }
 

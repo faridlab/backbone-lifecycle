@@ -86,6 +86,10 @@ pub struct LifecycleModule {
     /// Final-settlement draft + GL confirmation. Drafts from the same pesangon inputs as
     /// the close verb; confirm posts through the GL port and stamps only after the ack.
     pub final_settlement_write_service: Arc<application::service::FinalSettlementWriteService>,
+    /// Discipline records (SP1-SP3): issue/acknowledge/contest/cancel with the
+    /// derived-expiry predicate. The contest approvals port and the issued
+    /// event sink are unwired by default (fail-closed / log-only).
+    pub discipline_write_service: Arc<application::service::DisciplineWriteService>,
     // END CUSTOM
 }
 
@@ -335,6 +339,8 @@ impl LifecycleModuleBuilder {
                 db_pool.clone(),
                 activity_sink,
             ));
+        let discipline_write_service =
+            Arc::new(application::service::DisciplineWriteService::new(db_pool.clone()));
         // END CUSTOM
 
         Ok(LifecycleModule {
@@ -354,6 +360,7 @@ impl LifecycleModuleBuilder {
             onboarding_task_write_service,
             clearance_item_write_service,
             final_settlement_write_service,
+            discipline_write_service,
             // END CUSTOM
         })
     }

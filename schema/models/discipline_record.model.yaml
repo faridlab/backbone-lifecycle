@@ -1,0 +1,125 @@
+# =============================================================================
+# Domain: Lifecycle
+# Entity: DisciplineRecord
+# Description: One progressive-discipline warning letter (SP1-SP3) for an
+# employee. Validity is keyed to ISSUANCE, not acknowledgement (council
+# 2026-09-26): an SP is active while issued-and-unexpired; the employee's
+# acknowledgement is metadata and the employer's served disposition is
+# mandatory at issue time (Indonesian practice: the letter is valid on
+# physical service, refusal witnessed). There is deliberately NO `expired`
+# status — expiry is the shared derived predicate `valid_until >= today`.
+# The `prior_active_sp*` counts are ISSUE-TIME SNAPSHOTS for audit (what HR
+# saw), never live escalation inputs.
+# =============================================================================
+
+models:
+  - name: DisciplineRecord
+    collection: discipline_records
+    description: "One progressive-discipline warning (SP1-SP3): valid on service, expiry derived"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The disciplined employee # logical FK to employee.Employee.id"
+      level:
+        type: DisciplineLevel
+        attributes: ["@required"]
+        description: "The progressive-discipline step (SP1, SP2, SP3)"
+      offense:
+        type: string
+        attributes: ["@required", "@length(max=200)"]
+        description: "The offense class (short)"
+      description:
+        type: string
+        attributes: ["@required", "@length(max=4000)"]
+        description: "What happened, in the issuer's words"
+      issued_at:
+        type: datetime
+        attributes: ["@required"]
+        description: "When the letter was issued"
+      valid_until:
+        type: datetime
+        attributes: ["@required"]
+        description: "The validity window's end (default 6 months; sysparam at the host)"
+      served_disposition:
+        type: DisciplineServedDisposition
+        attributes: ["@required"]
+        description: "How the letter was served — mandatory at issue (delivered, or refused-and-witnessed)"
+      status:
+        type: DisciplineStatus
+        attributes: ["@required", "@default(issued)"]
+        description: "issued → acknowledged | acknowledged_pending | contested; cancelled terminal. No expired — expiry is derived"
+      acknowledged_at:
+        type: datetime?
+        description: "When the employee acknowledged in-app (metadata, never a validity gate)"
+      acknowledged_via:
+        type: string?
+        attributes: ["@length(max=40)"]
+        description: "The acknowledgement channel (in_app)"
+      document_file_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The rendered warning letter # logical FK to the bucket file"
+      cancel_reason:
+        type: string?
+        attributes: ["@length(max=1000)"]
+        description: "Mandatory when an issued record is cancelled"
+      prior_active_sp1:
+        type: int
+        attributes: ["@default(0)"]
+        description: "Issue-time snapshot: active SP1s the employee held"
+      prior_active_sp2:
+        type: int
+        attributes: ["@default(0)"]
+        description: "Issue-time snapshot: active SP2s the employee held"
+      issued_by:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The issuing HR user # logical FK to public.users.id"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: index
+        fields: [employee_id, status]
+
+enums:
+  - name: DisciplineLevel
+    description: "The progressive-discipline ladder (Indonesian SP practice)"
+    variants:
+      - name: sp1
+        description: "First written warning"
+        default: true
+      - name: sp2
+        description: "Second written warning"
+      - name: sp3
+        description: "Final written warning — grounds for misconduct offboarding"
+
+  - name: DisciplineStatus
+    description: "Discipline record lifecycle. No expired variant: expiry is derived from valid_until"
+    variants:
+      - name: issued
+        description: "Served (or refused-and-witnessed); active unless past valid_until"
+        default: true
+      - name: acknowledged
+        description: "The employee acknowledged in-app"
+      - name: acknowledged_pending
+        description: "A contest was refused — waiting for the acknowledgement again"
+      - name: contested
+        description: "The employee contests the record; an approval request is open"
+      - name: cancelled
+        description: "Cancelled by HR with a reason (mistaken issuance, upheld contest)"
+
+  - name: DisciplineServedDisposition
+    description: "How the letter reached the employee — the employer's act that makes it valid"
+    variants:
+      - name: delivered
+        description: "Handed to the employee (in-app or physically)"
+        default: true
+      - name: witnessed_refusal
+        description: "The employee refused to receive; a witness recorded the refusal"

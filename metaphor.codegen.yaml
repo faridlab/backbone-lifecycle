@@ -25,6 +25,9 @@ user_owned:
   - "src/application/service/checkpoint_write_service.rs"
   # Settlement drafting/confirmation + the GL-posting seam (post-before-stamp, idempotent per offboarding).
   - "src/application/service/final_settlement_write_service.rs"
+  # Discipline records (SP1-SP3): valid on service, derived expiry, contest port.
+  - "src/application/service/discipline_write_service.rs"
+  - "src/application/service/discipline_events.rs"
   # The guarded HTTP composition (read-only CRUD + validated verbs) — the recommended mount.
   - "src/presentation/http/guarded_routes.rs"
 

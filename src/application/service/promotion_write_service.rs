@@ -36,6 +36,10 @@ pub const PROMOTION_EFFECTIVE_EVENT_TYPE: &str = "promotion.effective";
 /// Errors from the promotion write-service.
 #[derive(Debug, thiserror::Error)]
 pub enum PromotionEffectError {
+    /// A supplied appraisal_id failed validation (not finalised, cycle not
+    /// closed, wrong employee, or the seam unwired) — the fail-closed 422.
+    #[error("appraisal not verified: {0}")]
+    AppraisalUnverified(String),
     /// No `Promotion` exists for the given id.
     #[error("promotion {0} not found")]
     NotFound(Uuid),
@@ -77,6 +81,7 @@ impl PromotionEffectError {
     pub fn code(&self) -> &'static str {
         match self {
             PromotionEffectError::NotFound(_) => "promotion_not_found",
+            PromotionEffectError::AppraisalUnverified(_) => "appraisal_unverified",
             PromotionEffectError::InvalidState(_) => "promotion_gate_refused",
             PromotionEffectError::NotApproved { .. } => "promotion_not_approved",
             PromotionEffectError::NotYetEffective { .. } => "promotion_not_yet_effective",
@@ -89,6 +94,7 @@ impl PromotionEffectError {
     pub fn http_status(&self) -> u16 {
         match self {
             PromotionEffectError::NotFound(_) => 404,
+            PromotionEffectError::AppraisalUnverified(_) => 422,
             PromotionEffectError::NotApproved { .. }
             | PromotionEffectError::NotYetEffective { .. }
             | PromotionEffectError::NotPending { .. }
@@ -117,6 +123,11 @@ pub struct NewPromotion {
     pub effective_date: chrono::NaiveDate,
     pub requested_by: Option<Uuid>,
     pub reason: Option<String>,
+    /// The merit justification: a FINALISED appraisal in a CLOSED cycle.
+    /// Supplied + the validation port unwired/mismatched → 422
+    /// `appraisal_unverified` (fail closed). The port's rating snapshot
+    /// stamps `appraisal_rating` at filing.
+    pub appraisal_id: Option<Uuid>,
 }
 
 /// The lifecycle write-service that owns the promotion approved→effective transition + the outbox emit.
@@ -128,6 +139,13 @@ pub struct PromotionWriteService {
     pool: PgPool,
     approvals:
         std::sync::RwLock<std::sync::Arc<dyn super::promotion_approvals_port::PromotionFilingPort>>,
+    /// The appraisal validation port (host-composed over the performance
+    /// module): a supplied appraisal_id must be a FINALISED appraisal in a
+    /// CLOSED cycle belonging to the employee. Unwired + supplied → the
+    /// fail-closed 422.
+    appraisal_validation: std::sync::RwLock<Option<std::sync::Arc<dyn PromotionValidationPort>>>,
+    // The rating snapshot stamped from a successful validation.
+    // (kept on the row, not in memory)
 }
 
 impl PromotionWriteService {
@@ -138,7 +156,15 @@ impl PromotionWriteService {
             approvals: std::sync::RwLock::new(std::sync::Arc::new(
                 super::promotion_approvals_port::UnwiredPromotionApprovals,
             )),
+            appraisal_validation: std::sync::RwLock::new(None),
         }
+    }
+
+    /// Wire the appraisal validation port (the composing service's adapter
+    /// over the performance module). Unwired, a supplied appraisal_id
+    /// refuses fail-closed.
+    pub fn set_appraisal_validation(&self, port: std::sync::Arc<dyn PromotionValidationPort>) {
+        *self.appraisal_validation.write().expect("promotion validation lock poisoned") = Some(port);
     }
 
     /// Wire the approvals port (the composing service's adapter).
@@ -165,6 +191,28 @@ impl PromotionWriteService {
     /// a schema-level state for imported records; the guarded surface always enters at
     /// `pending`.
     pub async fn create(&self, input: NewPromotion) -> Result<Uuid, PromotionEffectError> {
+        // The merit gate: a supplied appraisal must be a FINALISED
+        // appraisal in a CLOSED cycle for this employee (fail closed when
+        // the port is unwired — 422 appraisal_unverified). The returned
+        // rating is the row's snapshot (amendment 4: what audits read).
+        let appraisal_rating = match input.appraisal_id {
+            Some(appraisal_id) => {
+                let port = self.appraisal_validation.read().expect("promotion validation lock poisoned").clone();
+                match port {
+                    Some(port) => port
+                        .validate(appraisal_id, input.employee_id)
+                        .await
+                        .map_err(|e| PromotionEffectError::AppraisalUnverified(e))?,
+                    None => {
+                        return Err(PromotionEffectError::AppraisalUnverified(
+                            "the appraisal validation seam is not wired — supply a PromotionValidationPort or file without an appraisal reference".to_string(),
+                        ))
+                    }
+                }
+            }
+            None => None,
+        };
+
         let mut tx = self.pool.begin().await?;
         // Propagate the ambient request scope, when one is bound, onto this transaction:
         // rows a deployment's fence decorates are invisible to an unscoped connection.
@@ -185,10 +233,11 @@ impl PromotionWriteService {
                    (id, employee_id, promotion_type,
                     position_id_from, position_id_to, level_id_from, level_id_to,
                     department_id_from, department_id_to, proposed_salary,
-                    effective_date, status, requested_by, reason, metadata)
+                    effective_date, status, requested_by, reason, metadata,
+                    appraisal_id, appraisal_rating)
                VALUES ($1, $2, NULLIF($3, '')::promotion_type,
                        $4, $5, $6, $7, $8, $9, $10,
-                       $11, 'pending', $12, $13, $14::jsonb)"#,
+                       $11, 'pending', $12, $13, $14::jsonb, $15, $16)"#,
         )
         .bind(id)
         .bind(input.employee_id)
@@ -207,6 +256,8 @@ impl PromotionWriteService {
             r#"{"created_at":null,"updated_at":null,"deleted_at":null,
                 "created_by":null,"updated_by":null,"deleted_by":null}"#,
         )
+        .bind(input.appraisal_id)
+        .bind(appraisal_rating)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -518,4 +569,18 @@ impl PromotionWriteService {
         tx.commit().await?;
         Ok(Some(event_id))
     }
+}
+
+
+/// The appraisal validation port (the host-composed seam over the
+/// performance module — ADR-0004 forbids the sibling Cargo edge). Returns
+/// the FINALISED appraisal's rating for the snapshot; Err is the 422's
+/// message.
+#[async_trait::async_trait]
+pub trait PromotionValidationPort: Send + Sync {
+    async fn validate(
+        &self,
+        appraisal_id: uuid::Uuid,
+        employee_id: uuid::Uuid,
+    ) -> Result<Option<rust_decimal::Decimal>, String>;
 }

@@ -186,6 +186,9 @@ struct CreatePromotionBody {
     requested_by: Option<Uuid>,
     #[serde(default)]
     reason: Option<String>,
+    /// Optional merit justification: a FINALISED appraisal in a CLOSED cycle (validated fail-closed).
+    #[serde(default)]
+    appraisal_id: Option<Uuid>,
 }
 
 async fn create_promotion(
@@ -219,6 +222,7 @@ async fn create_promotion(
                 effective_date,
                 requested_by: b.requested_by,
                 reason: b.reason,
+                appraisal_id: b.appraisal_id,
             },
         )
         .await

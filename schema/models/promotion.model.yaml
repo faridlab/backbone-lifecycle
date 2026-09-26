@@ -97,7 +97,11 @@ models:
       appraisal_id:
         type: uuid?
         attributes: ["@exclude_from_foreign_key_check"]
-        description: "Merit justification # logical FK performance.Appraisal.id"
+        description: "Merit justification # logical FK performance.Appraisal.id — validated through the host-composed port at filing (fail-closed: a supplied id that is not a FINALISED appraisal in a CLOSED cycle refuses)"
+      appraisal_rating:
+        type: decimal?
+        attributes: ["@precision(3,1)"]
+        description: "The rating snapshot at filing time — what audits read, immune to any later change (the council's trust-window kill)"
 
       reason:
         type: string?

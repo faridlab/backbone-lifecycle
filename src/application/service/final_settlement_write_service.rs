@@ -466,20 +466,22 @@ impl FinalSettlementWriteService {
             return Err(FinalSettlementError::NothingToPost(settlement_id));
         }
 
-        // Build the envelope: Dr the severance + leave-encashment expense accounts,
-        // Cr the employee payable for the same total — party-tagged to the leaver.
+        // Build the envelope: Dr the severance + leave-encashment expense
+        // accounts, Cr the employee payable for the same total. The party
+        // tag rides ONLY the payable credit: the posting rules reject a
+        // party on a non-AR/AP line (PartyNotAllowed), and the expense
+        // debits are ordinary expense lines — the description names the
+        // leaver, the party dimension stays on the credit where it belongs.
         let mut lines = Vec::with_capacity(3);
         if !severance.is_zero() {
             lines.push(
                 GlPostLine::debit(accounts.severance_expense_account_id, severance)
-                    .with_party("employee", employee_id)
                     .with_description(format!("final settlement severance · period {period}")),
             );
         }
         if !leave.is_zero() {
             lines.push(
                 GlPostLine::debit(accounts.leave_encashment_expense_account_id, leave)
-                    .with_party("employee", employee_id)
                     .with_description(format!(
                         "final settlement leave encashment · period {period}"
                     )),

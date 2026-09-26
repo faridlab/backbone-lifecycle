@@ -888,6 +888,8 @@ mod overlap_tests {
             Arc::new(OnboardingTaskWriteService::new(pool.clone(), unwired.clone())),
             Arc::new(ClearanceItemWriteService::new(pool.clone(), unwired.clone())),
             Arc::new(FinalSettlementWriteService::with_pool(pool.clone())),
+            Arc::new(crate::application::service::DisciplineWriteService::new(pool.clone())),
+            Arc::new(crate::application::service::ContractWriteService::new(pool.clone())),
         );
 
         // The generic checkpoint write trio create_guarded_lifecycle_routes

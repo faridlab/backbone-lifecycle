@@ -14,8 +14,24 @@ pub mod onboarding_task_dto;
 pub mod onboarding_template_dto;
 pub mod onboarding_template_task_dto;
 pub mod promotion_dto;
+// The three employment-record entities.
+pub mod contract_dto;
+pub mod contract_template_dto;
+pub mod discipline_record_dto;
 
 // Re-exports
+pub use contract_dto::{
+    CreateContractDto, UpdateContractDto, PatchContractDto, ContractResponseDto,
+    ContractListResponseDto, ContractSummaryDto,
+};
+pub use contract_template_dto::{
+    CreateContractTemplateDto, UpdateContractTemplateDto, PatchContractTemplateDto,
+    ContractTemplateResponseDto, ContractTemplateListResponseDto, ContractTemplateSummaryDto,
+};
+pub use discipline_record_dto::{
+    CreateDisciplineRecordDto, UpdateDisciplineRecordDto, PatchDisciplineRecordDto,
+    DisciplineRecordResponseDto, DisciplineRecordListResponseDto, DisciplineRecordSummaryDto,
+};
 pub use clearance_item_dto::{
     CreateClearanceItemDto,
     UpdateClearanceItemDto,

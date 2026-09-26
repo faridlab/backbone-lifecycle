@@ -14,6 +14,12 @@ pub mod onboarding_task_handler;
 pub mod onboarding_template_handler;
 pub mod onboarding_template_task_handler;
 pub mod promotion_handler;
+// The three employment-record entities: generated CRUD handlers (the read
+// surface mounts in LifecycleModule::readonly_routes; writes stay verb-only
+// except the checkpoint-style template master data).
+pub mod contract_handler;
+pub mod contract_template_handler;
+pub mod discipline_record_handler;
 
 // <<< CUSTOM
 // Guarded composition (read-only CRUD + validated write verbs) — the recommended mount.
@@ -30,6 +36,9 @@ pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboardi
 pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes};
 pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
 pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
+pub use contract_handler::{create_contract_routes, create_contract_read_routes, create_contract_write_routes};
+pub use contract_template_handler::{create_contract_template_routes, create_contract_template_read_routes, create_contract_template_write_routes};
+pub use discipline_record_handler::{create_discipline_record_routes, create_discipline_record_read_routes, create_discipline_record_write_routes};
 // <<< CUSTOM
 pub use guarded_routes::create_guarded_lifecycle_routes;
 // END CUSTOM

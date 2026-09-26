@@ -14,6 +14,12 @@ mod onboarding_template_repository;
 mod onboarding_template_task_repository;
 mod promotion_repository;
 
+// The three employment-record entities (contracts, contract templates,
+// discipline records): generated repositories, wired for the read surface.
+mod contract_repository;
+mod contract_template_repository;
+mod discipline_record_repository;
+
 // Custom persistence modules
 // <<< CUSTOM
 // END CUSTOM
@@ -28,6 +34,9 @@ pub use onboarding_task_repository::OnboardingTaskRepository;
 pub use onboarding_template_repository::OnboardingTemplateRepository;
 pub use onboarding_template_task_repository::OnboardingTemplateTaskRepository;
 pub use promotion_repository::PromotionRepository;
+pub use contract_repository::ContractRepository;
+pub use contract_template_repository::ContractTemplateRepository;
+pub use discipline_record_repository::DisciplineRecordRepository;
 
 // Re-export backbone-orm types
 pub use backbone_orm::repository::{

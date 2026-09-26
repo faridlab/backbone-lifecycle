@@ -41,6 +41,9 @@ pub use application::service::OnboardingTaskService;
 pub use application::service::OnboardingTemplateService;
 pub use application::service::OnboardingTemplateTaskService;
 pub use application::service::PromotionService;
+pub use application::service::ContractService;
+pub use application::service::ContractTemplateService;
+pub use application::service::DisciplineRecordService;
 
 // Re-exports - Workflows
 pub use application::workflows::*;
@@ -71,6 +74,11 @@ pub struct LifecycleModule {
     pub(crate) onboarding_template_service: Arc<OnboardingTemplateService>,
     pub(crate) onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
     pub(crate) promotion_service: Arc<PromotionService>,
+    // The three employment-record entities: plain CRUD services backing the
+    // generic read surface (writes go through their dedicated write services).
+    pub(crate) contract_service: Arc<ContractService>,
+    pub(crate) contract_template_service: Arc<ContractTemplateService>,
+    pub(crate) discipline_record_service: Arc<DisciplineRecordService>,
     // <<< CUSTOM FIELDS
     /// The three career-lifecycle write-services (ADR-005 producers): each flips a workflow status
     /// and stages the matching compound event in one tx. Public so the composer / tests can drive
@@ -158,6 +166,9 @@ impl LifecycleModule {
             create_onboarding_template_read_routes,
             create_onboarding_template_task_read_routes,
             create_promotion_read_routes,
+            create_contract_read_routes,
+            create_contract_template_read_routes,
+            create_discipline_record_read_routes,
         };
 
         Router::new()
@@ -170,6 +181,9 @@ impl LifecycleModule {
             .merge(create_onboarding_template_read_routes(self.onboarding_template_service.clone()))
             .merge(create_onboarding_template_task_read_routes(self.onboarding_template_task_service.clone()))
             .merge(create_promotion_read_routes(self.promotion_service.clone()))
+            .merge(create_contract_read_routes(self.contract_service.clone()))
+            .merge(create_contract_template_read_routes(self.contract_template_service.clone()))
+            .merge(create_discipline_record_read_routes(self.discipline_record_service.clone()))
     }
 
     // <<< CUSTOM METHODS
@@ -298,6 +312,14 @@ impl LifecycleModuleBuilder {
         let promotion_repository = Arc::new(PromotionRepository::new(db_pool.clone()));
         let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
 
+        // Employment-record CRUD services (read surface only).
+        let contract_repository = Arc::new(ContractRepository::new(db_pool.clone()));
+        let contract_service = Arc::new(ContractService::with_repository(contract_repository.clone()));
+        let contract_template_repository = Arc::new(ContractTemplateRepository::new(db_pool.clone()));
+        let contract_template_service = Arc::new(ContractTemplateService::with_repository(contract_template_repository.clone()));
+        let discipline_record_repository = Arc::new(DisciplineRecordRepository::new(db_pool.clone()));
+        let discipline_record_service = Arc::new(DisciplineRecordService::with_repository(discipline_record_repository.clone()));
+
         // <<< CUSTOM
         // ADR-005 producers: bound to the same pool as the repos. Each verb opens its own tx around
         // the state change + the outbox stage; no shared mutable state, so an Arc is purely for cheap reuse.
@@ -358,6 +380,9 @@ impl LifecycleModuleBuilder {
             onboarding_template_service,
             onboarding_template_task_service,
             promotion_service,
+            contract_service,
+            contract_template_service,
+            discipline_record_service,
             // <<< CUSTOM
             promotion_write_service,
             onboarding_write_service,

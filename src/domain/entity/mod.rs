@@ -11,6 +11,15 @@ pub mod onboarding_task;
 pub mod onboarding_template;
 pub mod onboarding_template_task;
 pub mod promotion;
+// The three employment-record entities and their enums.
+pub mod contract;
+pub mod contract_status;
+pub mod contract_type;
+pub mod contract_template;
+pub mod discipline_record;
+pub mod discipline_level;
+pub mod discipline_status;
+pub mod discipline_served_disposition;
 pub mod clearance_status;
 pub mod settlement_status;
 pub mod offboarding_reason;
@@ -22,6 +31,14 @@ pub mod promotion_type;
 pub mod promotion_status;
 
 // Re-exports
+pub use contract::{Contract, ContractBuilder, ContractId};
+pub use contract_status::ContractStatus;
+pub use contract_type::ContractType;
+pub use contract_template::{ContractTemplate, ContractTemplateBuilder, ContractTemplateId};
+pub use discipline_record::{DisciplineRecord, DisciplineRecordBuilder, DisciplineRecordId};
+pub use discipline_level::DisciplineLevel;
+pub use discipline_status::DisciplineStatus;
+pub use discipline_served_disposition::DisciplineServedDisposition;
 pub use clearance_item::ClearanceItem;
 pub use clearance_item::ClearanceItemBuilder;
 pub use clearance_item::ClearanceItemId;

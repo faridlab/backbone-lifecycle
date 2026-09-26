@@ -243,9 +243,13 @@ impl FinalSettlementWriteService {
     /// so the row can never disagree with the `offboarding.closed` event payload:
     /// - `base_pay`: calendar-day proration of the final month:
     ///   `day_of(last_working_day) / days_in_month(last_working_day) × monthly_salary`
+    ///   (informational — the final-period salary flows through the payroll
+    ///   lane, never this settlement's envelope)
     /// - `pesangon_amount`: pesangon + UPMK + UPM (severance proper; leave is separate)
     /// - `unused_leave_payout`: the calc's leave payout
-    /// - `net_payable`: the sum of the three
+    /// - `net_payable`: pesangon + leave payout — exactly what the confirm
+    ///   envelope credits and mark-paid acknowledges, so the books and the
+    ///   row can never disagree on what this settlement owes the leaver
     /// - `period`: `YYYY-MM` of the last working day
     ///
     /// # Returns
@@ -330,7 +334,11 @@ impl FinalSettlementWriteService {
         // Severance proper (pesangon + UPMK + UPM); the leave payout is its own column.
         let pesangon_amount = money(breakdown.pesangon + breakdown.upmk + breakdown.upm);
         let unused_leave_payout = money(breakdown.unused_leave_payout);
-        let net_payable = money(base_pay + pesangon_amount + unused_leave_payout);
+        // The payable this settlement actually books and pays: the severance
+        // items only. base_pay rides its own column as payroll-lane
+        // information — folding it in would make the row promise more than
+        // the confirm envelope ever credits.
+        let net_payable = money(pesangon_amount + unused_leave_payout);
         let period = last_working_day.format("%Y-%m").to_string();
 
         // One live settlement per offboarding. The partial unique index

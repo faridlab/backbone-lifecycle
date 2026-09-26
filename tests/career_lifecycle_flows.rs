@@ -1623,7 +1623,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
 
     // base_pay = 22M × 1/31 (2024-01-01, 31-day month) = 709,677.42
     // pesangon_amount = 88M + 88M + 26.4M = 202,400,000 · leave = 5,000,000
-    // net = 208,109,677.42
+    // net = 207,400,000 (severance items only — base pay flows through the
+    // payroll lane, never this settlement's envelope)
     let row = sqlx::query(
         r#"SELECT period, base_pay, unused_leave_payout, pesangon_amount, net_payable,
                   status::text AS status, accounting_post_id
@@ -1647,7 +1648,7 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     );
     assert_eq!(
         row.get::<Decimal, _>("net_payable"),
-        Decimal::from_str_exact("208109677.42").unwrap()
+        Decimal::from_str_exact("207400000.00").unwrap()
     );
     assert_eq!(row.get::<String, _>("status"), "draft");
     assert!(row.get::<Option<Uuid>, _>("accounting_post_id").is_none());

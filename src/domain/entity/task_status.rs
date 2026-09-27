@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "snake_case")]
-#[sqlx(type_name = "task_status", rename_all = "snake_case")]
+#[sqlx(type_name = "lifecycle.task_status", rename_all = "snake_case")]
 pub enum TaskStatus {
     Pending,
     Done,

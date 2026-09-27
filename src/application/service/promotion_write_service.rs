@@ -290,7 +290,23 @@ impl PromotionWriteService {
             {
                 Ok(request_id) => Some(request_id),
                 Err(super::promotion_approvals_port::PromotionSeamError::Unwired) => None,
-                Err(e) => return Err(PromotionEffectError::Db(sqlx::Error::Protocol(e.to_string()))),
+                // A WIRED port that fails takes the promotion with it: a row
+                // committed with no approval request behind it is half-made
+                // (the approve gate refuses it, the screens show a pending
+                // nothing can advance). Compensating delete — same pool,
+                // same scope.
+                Err(e) => {
+                    let mut tx = self.rpool().begin().await?;
+                    if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+                        backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+                    }
+                    let _ = sqlx::query("DELETE FROM lifecycle.promotions WHERE id = $1")
+                        .bind(id)
+                        .execute(&mut *tx)
+                        .await;
+                    let _ = tx.commit().await;
+                    return Err(PromotionEffectError::Db(sqlx::Error::Protocol(e.to_string())));
+                }
             }
         };
         if let Some(request_id) = approval_request_id {

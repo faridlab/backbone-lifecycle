@@ -360,7 +360,16 @@ impl PromotionWriteService {
         .fetch_optional(&mut *tx)
         .await?
         .flatten();
-        if let Some(request_id) = linked {
+        // The link MUST exist: a promotion with NO approval request behind
+        // it (a failed or skipped filing) refuses here, fail-closed, instead
+        // of approving on row state alone.
+        let Some(request_id) = linked else {
+            tx.rollback().await?;
+            return Err(PromotionEffectError::InvalidState(
+                "the promotion has no approval request behind it",
+            ));
+        };
+        {
             let port = self
                 .approvals
                 .read()

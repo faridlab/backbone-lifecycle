@@ -93,7 +93,7 @@ pub enum FinalSettlementError {
     Pesangon(#[from] crate::application::service::pesangon::PesangonError),
     /// The settlement is not `draft` (only a draft may be confirmed; an already-confirmed
     /// one is a no-op via `Ok(None)`).
-    #[error("final settlement {settlement_id} is not draft (status: {status})")]
+    #[error("final settlement {settlement_id} is not awaiting mark-paid (status: {status}; confirm the settlement first)")]
     NotDraft { settlement_id: Uuid, status: String },
     /// Nothing would post — severance and leave payout are both zero.
     #[error("final settlement {0} has nothing to post (severance and leave payout are both zero)")]

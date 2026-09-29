@@ -11,6 +11,7 @@
 # Add your hand-authored services, handlers, tests, and docs below as you write them.
 
 user_owned:
+  - "src/request_pool.rs"
   # Hand-authored behavior (services + their HTTP surface). Examples:
   # - "src/application/service/onboarding_service.rs"
   # - "src/presentation/http/guarded_routes.rs"

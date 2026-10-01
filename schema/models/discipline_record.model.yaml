@@ -15,6 +15,8 @@
 models:
   - name: DisciplineRecord
     collection: discipline_records
+    # Data-change audit capture (ADR-0025): per-row trigger -> auditlog.capture_data_change.
+    audited: true
     description: "One progressive-discipline warning (SP1-SP3): valid on service, expiry derived"
     fields:
       id:

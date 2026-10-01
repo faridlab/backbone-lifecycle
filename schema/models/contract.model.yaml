@@ -14,6 +14,8 @@
 models:
   - name: Contract
     collection: contracts
+    # Data-change audit capture (ADR-0025): per-row trigger -> auditlog.capture_data_change.
+    audited: true
     description: "One employment contract: PKWTT indefinite or PKWT fixed-term, chained across renewals"
     fields:
       id:

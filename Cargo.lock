@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-lifecycle"
-version = "0.3.44"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -409,9 +409,9 @@ dependencies = [
 
 [[package]]
 name = "backbone-payroll"
-version = "0.3.47"
+version = "0.3.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f92e66fa63ba7f842a09f7ad3d2f26b4f886c584e8a9c585927583f3bd9eea"
+checksum = "eedd32e36c6f169d4e70987b7544f87bc067a5aa90a61eeabf3a1ead1e9e04a4"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.3.44"
+version = "0.4.0"
 edition = "2021"
 description = "Employee lifecycle: onboarding and offboarding with templates and tasks, contracts, promotions, discipline records, exit interviews, clearance and final settlement"
 license = "MIT OR Apache-2.0"
@@ -108,7 +108,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 # consumers to prove the end-to-end outbox flow + idempotency. Dev-only — production never depends
 # lifecycle→employee/payroll/timeoff (the composer wires them, never the modules directly).
 backbone-employee = { version = "0.2.45" }
-backbone-payroll = { version = "0.3.47" }
+backbone-payroll = { version = "0.3.49" }
 backbone-timeoff = { version = "0.4.33" }
 jsonwebtoken = "9.3"
 rand = "0.8"

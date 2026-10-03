@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -57,6 +57,17 @@ pub struct FinalSettlement {
     pub base_pay: Decimal,
     pub unused_leave_payout: Option<Decimal>,
     pub pesangon_amount: Option<Decimal>,
+    pub uang_pesangon: Option<Decimal>,
+    pub upmk: Option<Decimal>,
+    pub uang_pisah: Option<Decimal>,
+    pub monthly_wage: Option<Decimal>,
+    pub daily_wage: Option<Decimal>,
+    pub work_days_per_week: Option<i32>,
+    pub unused_leave_days: Option<Decimal>,
+    pub tenure_years: Option<Decimal>,
+    pub legal_basis: Option<String>,
+    pub statutory_effective_from: Option<NaiveDate>,
+    pub last_pay_via_payroll: bool,
     pub tax_deduction: Option<Decimal>,
     pub net_payable: Decimal,
     pub status: SettlementStatus,
@@ -74,7 +85,7 @@ impl FinalSettlement {
     }
 
     /// Create a new FinalSettlement with required fields
-    pub fn new(employee_id: Uuid, offboarding_id: Uuid, period: String, base_pay: Decimal, net_payable: Decimal, status: SettlementStatus) -> Self {
+    pub fn new(employee_id: Uuid, offboarding_id: Uuid, period: String, base_pay: Decimal, last_pay_via_payroll: bool, net_payable: Decimal, status: SettlementStatus) -> Self {
         Self {
             id: Uuid::new_v4(),
             employee_id,
@@ -83,6 +94,17 @@ impl FinalSettlement {
             base_pay,
             unused_leave_payout: None,
             pesangon_amount: None,
+            uang_pesangon: None,
+            upmk: None,
+            uang_pisah: None,
+            monthly_wage: None,
+            daily_wage: None,
+            work_days_per_week: None,
+            unused_leave_days: None,
+            tenure_years: None,
+            legal_basis: None,
+            statutory_effective_from: None,
+            last_pay_via_payroll,
             tax_deduction: None,
             net_payable,
             status,
@@ -164,6 +186,66 @@ impl FinalSettlement {
         self
     }
 
+    /// Set the uang_pesangon field (chainable)
+    pub fn with_uang_pesangon(mut self, value: Decimal) -> Self {
+        self.uang_pesangon = Some(value);
+        self
+    }
+
+    /// Set the upmk field (chainable)
+    pub fn with_upmk(mut self, value: Decimal) -> Self {
+        self.upmk = Some(value);
+        self
+    }
+
+    /// Set the uang_pisah field (chainable)
+    pub fn with_uang_pisah(mut self, value: Decimal) -> Self {
+        self.uang_pisah = Some(value);
+        self
+    }
+
+    /// Set the monthly_wage field (chainable)
+    pub fn with_monthly_wage(mut self, value: Decimal) -> Self {
+        self.monthly_wage = Some(value);
+        self
+    }
+
+    /// Set the daily_wage field (chainable)
+    pub fn with_daily_wage(mut self, value: Decimal) -> Self {
+        self.daily_wage = Some(value);
+        self
+    }
+
+    /// Set the work_days_per_week field (chainable)
+    pub fn with_work_days_per_week(mut self, value: i32) -> Self {
+        self.work_days_per_week = Some(value);
+        self
+    }
+
+    /// Set the unused_leave_days field (chainable)
+    pub fn with_unused_leave_days(mut self, value: Decimal) -> Self {
+        self.unused_leave_days = Some(value);
+        self
+    }
+
+    /// Set the tenure_years field (chainable)
+    pub fn with_tenure_years(mut self, value: Decimal) -> Self {
+        self.tenure_years = Some(value);
+        self
+    }
+
+    /// Set the legal_basis field (chainable)
+    pub fn with_legal_basis(mut self, value: String) -> Self {
+        self.legal_basis = Some(value);
+        self
+    }
+
+    /// Set the statutory_effective_from field (chainable)
+    pub fn with_statutory_effective_from(mut self, value: NaiveDate) -> Self {
+        self.statutory_effective_from = Some(value);
+        self
+    }
+
     /// Set the tax_deduction field (chainable)
     pub fn with_tax_deduction(mut self, value: Decimal) -> Self {
         self.tax_deduction = Some(value);
@@ -207,6 +289,39 @@ impl FinalSettlement {
                 }
                 "pesangon_amount" => {
                     if let Ok(v) = serde_json::from_value(value) { self.pesangon_amount = v; }
+                }
+                "uang_pesangon" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.uang_pesangon = v; }
+                }
+                "upmk" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.upmk = v; }
+                }
+                "uang_pisah" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.uang_pisah = v; }
+                }
+                "monthly_wage" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.monthly_wage = v; }
+                }
+                "daily_wage" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.daily_wage = v; }
+                }
+                "work_days_per_week" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.work_days_per_week = v; }
+                }
+                "unused_leave_days" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.unused_leave_days = v; }
+                }
+                "tenure_years" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.tenure_years = v; }
+                }
+                "legal_basis" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.legal_basis = v; }
+                }
+                "statutory_effective_from" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.statutory_effective_from = v; }
+                }
+                "last_pay_via_payroll" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.last_pay_via_payroll = v; }
                 }
                 "tax_deduction" => {
                     if let Ok(v) = serde_json::from_value(value) { self.tax_deduction = v; }
@@ -282,6 +397,7 @@ impl backbone_orm::EntityRepoMeta for FinalSettlement {
         m.insert("accounting_post_id".to_string(), "uuid".to_string());
         m.insert("journal_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "settlement_status".to_string());
+        m.insert("statutory_effective_from".to_string(), "date".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
@@ -301,6 +417,17 @@ pub struct FinalSettlementBuilder {
     base_pay: Option<Decimal>,
     unused_leave_payout: Option<Decimal>,
     pesangon_amount: Option<Decimal>,
+    uang_pesangon: Option<Decimal>,
+    upmk: Option<Decimal>,
+    uang_pisah: Option<Decimal>,
+    monthly_wage: Option<Decimal>,
+    daily_wage: Option<Decimal>,
+    work_days_per_week: Option<i32>,
+    unused_leave_days: Option<Decimal>,
+    tenure_years: Option<Decimal>,
+    legal_basis: Option<String>,
+    statutory_effective_from: Option<NaiveDate>,
+    last_pay_via_payroll: Option<bool>,
     tax_deduction: Option<Decimal>,
     net_payable: Option<Decimal>,
     status: Option<SettlementStatus>,
@@ -342,6 +469,72 @@ impl FinalSettlementBuilder {
     /// Set the pesangon_amount field (optional)
     pub fn pesangon_amount(mut self, value: Decimal) -> Self {
         self.pesangon_amount = Some(value);
+        self
+    }
+
+    /// Set the uang_pesangon field (optional)
+    pub fn uang_pesangon(mut self, value: Decimal) -> Self {
+        self.uang_pesangon = Some(value);
+        self
+    }
+
+    /// Set the upmk field (optional)
+    pub fn upmk(mut self, value: Decimal) -> Self {
+        self.upmk = Some(value);
+        self
+    }
+
+    /// Set the uang_pisah field (optional)
+    pub fn uang_pisah(mut self, value: Decimal) -> Self {
+        self.uang_pisah = Some(value);
+        self
+    }
+
+    /// Set the monthly_wage field (optional)
+    pub fn monthly_wage(mut self, value: Decimal) -> Self {
+        self.monthly_wage = Some(value);
+        self
+    }
+
+    /// Set the daily_wage field (optional)
+    pub fn daily_wage(mut self, value: Decimal) -> Self {
+        self.daily_wage = Some(value);
+        self
+    }
+
+    /// Set the work_days_per_week field (optional)
+    pub fn work_days_per_week(mut self, value: i32) -> Self {
+        self.work_days_per_week = Some(value);
+        self
+    }
+
+    /// Set the unused_leave_days field (optional)
+    pub fn unused_leave_days(mut self, value: Decimal) -> Self {
+        self.unused_leave_days = Some(value);
+        self
+    }
+
+    /// Set the tenure_years field (optional)
+    pub fn tenure_years(mut self, value: Decimal) -> Self {
+        self.tenure_years = Some(value);
+        self
+    }
+
+    /// Set the legal_basis field (optional)
+    pub fn legal_basis(mut self, value: String) -> Self {
+        self.legal_basis = Some(value);
+        self
+    }
+
+    /// Set the statutory_effective_from field (optional)
+    pub fn statutory_effective_from(mut self, value: NaiveDate) -> Self {
+        self.statutory_effective_from = Some(value);
+        self
+    }
+
+    /// Set the last_pay_via_payroll field (default: `true`)
+    pub fn last_pay_via_payroll(mut self, value: bool) -> Self {
+        self.last_pay_via_payroll = Some(value);
         self
     }
 
@@ -393,6 +586,17 @@ impl FinalSettlementBuilder {
             base_pay,
             unused_leave_payout: self.unused_leave_payout,
             pesangon_amount: self.pesangon_amount,
+            uang_pesangon: self.uang_pesangon,
+            upmk: self.upmk,
+            uang_pisah: self.uang_pisah,
+            monthly_wage: self.monthly_wage,
+            daily_wage: self.daily_wage,
+            work_days_per_week: self.work_days_per_week,
+            unused_leave_days: self.unused_leave_days,
+            tenure_years: self.tenure_years,
+            legal_basis: self.legal_basis,
+            statutory_effective_from: self.statutory_effective_from,
+            last_pay_via_payroll: self.last_pay_via_payroll.unwrap_or(true),
             tax_deduction: self.tax_deduction,
             net_payable,
             status: self.status.unwrap_or_default(),

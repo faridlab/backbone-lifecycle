@@ -5,9 +5,12 @@
 #              drives clearance, exit interview, and final settlement. Emits an
 #              `Offboarded` event on close for the composer to flip
 #              employee.employment.status to inactive. The `reason` variant set
-#              spans both the lifecycle causes (resignation/termination/…) AND
-#              the 🇮🇩 pesangon (severance) calc causes (merger/efficiency/…),
-#              since reason selects the statutory severance formula.
+#              names the PP 35/2021 termination case the exit falls under,
+#              since the reason selects the statutory severance multipliers
+#              (read from the effective-dated lifecycle.severance_* tables).
+#              The nine original coarse labels stay accepted so older rows
+#              still read; the settlement maps each onto one PP 35 case (or
+#              refuses, for the ambiguous `termination`).
 # =============================================================================
 
 models:
@@ -29,7 +32,7 @@ models:
       reason:
         type: OffboardingReason
         attributes: ["@required", "@default(resignation)"]
-        description: "Why the employee is leaving — also selects the pesangon formula"
+        description: "Why the employee is leaving — the PP 35/2021 case that selects the severance multipliers"
 
       notice_date:
         type: date
@@ -57,27 +60,73 @@ models:
 
 enums:
   - name: OffboardingReason
-    description: "Reason for offboarding — doubles as the pesangon (severance) calc selector"
+    description: "Reason for offboarding — the PP 35/2021 termination case that selects the severance multipliers"
     variants:
+      # ── PP 35/2021 cases (one per article / paragraph) ─────────────────────
       - name: resignation
         default: true
-        description: "Voluntary resignation — pesangon scaled by tenure"
-      - name: termination
-        description: "Employer-initiated termination"
-      - name: end_of_contract
-        description: "Fixed-term contract ended naturally"
+        description: "PP 35/2021 Pasal 50 — voluntary resignation: no pesangon or UPMK; uang pisah per company policy"
+      - name: merger_consolidation_split
+        description: "PP 35/2021 Pasal 41 — merger, consolidation or split; either party unwilling to continue: pesangon 1x, UPMK 1x"
+      - name: takeover
+        description: "PP 35/2021 Pasal 42(1) — takeover (pengambilalihan): pesangon 1x, UPMK 1x"
+      - name: takeover_changed_terms
+        description: "PP 35/2021 Pasal 42(2) — takeover with changed terms the worker will not accept: pesangon 0.5x, UPMK 1x"
+      - name: efficiency_losses
+        description: "PP 35/2021 Pasal 43(1) — efficiency because the company suffers losses: pesangon 0.5x, UPMK 1x"
+      - name: efficiency_prevent_losses
+        description: "PP 35/2021 Pasal 43(2) — efficiency to prevent losses: pesangon 1x, UPMK 1x"
+      - name: closure_losses
+        description: "PP 35/2021 Pasal 44(1) — closure due to losses: pesangon 0.5x, UPMK 1x"
+      - name: closure_not_losses
+        description: "PP 35/2021 Pasal 44(2) — closure not due to losses: pesangon 1x, UPMK 1x"
+      - name: closure_force_majeure
+        description: "PP 35/2021 Pasal 45(1) — closure due to force majeure: pesangon 0.5x, UPMK 1x"
+      - name: force_majeure_no_closure
+        description: "PP 35/2021 Pasal 45(2) — force majeure without closure: pesangon 0.75x, UPMK 1x"
+      - name: pkpu_losses
+        description: "PP 35/2021 Pasal 46(1) — debt-payment suspension (PKPU) caused by losses: pesangon 0.5x, UPMK 1x"
+      - name: pkpu_not_losses
+        description: "PP 35/2021 Pasal 46(2) — debt-payment suspension (PKPU) not caused by losses: pesangon 1x, UPMK 1x"
+      - name: bankruptcy
+        description: "PP 35/2021 Pasal 47 — bankruptcy (pailit): pesangon 0.5x, UPMK 1x"
+      - name: employer_violation_request
+        description: "PP 35/2021 Pasal 48 — at the worker's request after an employer act under Pasal 36(g): pesangon 1x, UPMK 1x"
+      - name: worker_request_rejected
+        description: "PP 35/2021 Pasal 49 — the worker's request was rejected by the industrial-relations ruling: uang pisah only"
+      - name: absence_without_notice
+        description: "PP 35/2021 Pasal 51 — absent five or more working days and summoned twice in writing: uang pisah only"
+      - name: violation_after_warnings
+        description: "PP 35/2021 Pasal 52(1) — violation after the first, second and third warning letters: pesangon 0.5x, UPMK 1x"
+      - name: urgent_violation
+        description: "PP 35/2021 Pasal 52(2) — urgent violation (pelanggaran bersifat mendesak): uang pisah only"
+      - name: detained_company_loss
+        description: "PP 35/2021 Pasal 54(1) — detained six months, causing the company loss: uang pisah only"
+      - name: detained_no_company_loss
+        description: "PP 35/2021 Pasal 54(2) — detained six months, no loss to the company: UPMK 1x"
+      - name: convicted_company_loss
+        description: "PP 35/2021 Pasal 54(4) — convicted within six months, in the Pasal 54(1) case: uang pisah only"
+      - name: convicted_no_company_loss
+        description: "PP 35/2021 Pasal 54(5) — convicted within six months, in the Pasal 54(2) case: UPMK 1x"
+      - name: prolonged_illness
+        description: "PP 35/2021 Pasal 55 — prolonged illness or work-accident disability past twelve months: pesangon 2x, UPMK 1x"
       - name: retirement
-        description: "Retirement (pension/JHT rules apply)"
+        description: "PP 35/2021 Pasal 56 — retirement age: pesangon 1.75x, UPMK 1x"
       - name: death
-        description: "Death of the employee (per UU Manpower)"
+        description: "PP 35/2021 Pasal 57 — death (paid to the heirs): pesangon 2x, UPMK 1x"
+      # ── Earlier coarse labels, kept so existing rows still read ────────────
+      - name: end_of_contract
+        description: "Fixed-term (PKWT) contract ended — no pesangon or UPMK; the PKWT compensation of PP 35/2021 Pasal 15-16 is not computed here"
+      - name: termination
+        description: "Earlier unspecific label — the settlement refuses to compute it; record the specific PP 35/2021 case instead"
       - name: merger_acquisition
-        description: "Merger / acquisition — pesangon 1 mo/yr, cap 8"
+        description: "Earlier label — computed as Pasal 41 (merger_consolidation_split)"
       - name: efficiency
-        description: "Efficiency / restructuring — pesangon 1 mo/yr, cap 8"
+        description: "Earlier label — computed as Pasal 43(2) (efficiency_prevent_losses), the employee-favourable reading"
       - name: force_majeure
-        description: "Force majeure — pesangon 0.5 mo/yr, cap 4"
+        description: "Earlier label — computed as Pasal 45(2) (force_majeure_no_closure)"
       - name: misconduct
-        description: "Misconduct (gross) — no pesangon"
+        description: "Earlier label — computed as Pasal 52(2) (urgent_violation)"
 
   - name: OffboardingStatus
     description: "Offboarding workflow status"

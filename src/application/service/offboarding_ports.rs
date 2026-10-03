@@ -1,10 +1,10 @@
 //! Read ports for the offboarding→pesangon settlement (ADR-005).
 //!
-//! The 🇮🇩 pesangon calc ([`crate::application::service::pesangon::pesangon`]) needs three
-//! cross-module inputs at close-time: the employee's `join_date` (for tenure), their current
-//! gross monthly salary (payroll), and their remaining leave days (timeoff). Lifecycle OWNS the
-//! close transition and the pesangon computation, but it does NOT own those tables — so it reads
-//! them through this port trait.
+//! The final-settlement calc ([`crate::application::service::pesangon::compute_settlement`])
+//! needs three cross-module inputs at close-time: the employee's `join_date` (for tenure), their
+//! current monthly salary (payroll), and their unused annual leave days (timeoff). Lifecycle OWNS
+//! the close transition and the computation, but it does NOT own those tables — so it reads them
+//! through this port trait.
 //!
 //! ## Why a port, and why pool-backed by default
 //!
@@ -25,7 +25,7 @@ use rust_decimal::Decimal;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// The three cross-module inputs the pesangon calc consumes at offboarding close.
+/// The three cross-module inputs the settlement calc consumes at offboarding close.
 ///
 /// Every method takes the caller's `company` and reads inside an organization
 /// request scope keyed on that company's unit — the source tables carry their own
@@ -43,16 +43,25 @@ pub trait OffboardingInputs: Send + Sync {
     async fn join_date(&self, company: Uuid, employee_id: Uuid)
         -> Result<Option<NaiveDate>, sqlx::Error>;
 
-    /// The employee's current gross monthly salary — the latest non-null
+    /// The employee's current monthly salary — the latest non-null
     /// `payroll.compensation_changes.new_amount` ordered by `effective_date` descending (the
-    /// running salary set by the most recent hire/promotion/transfer row).
+    /// running salary set by the most recent hire/promotion/transfer/adjustment row). Rows of
+    /// change type `offboarding` are NOT salaries — they record a settlement total — and are
+    /// skipped, so a settlement drafted after the close reads the same wage the close did.
     async fn current_monthly_salary(&self, company: Uuid, employee_id: Uuid)
         -> Result<Option<Decimal>, sqlx::Error>;
 
-    /// Remaining leave days across all the employee's non-deleted `timeoff.timeoff_balances` rows
-    /// — `SUM(allocated - used)`. Returns `0` when the employee has no balance rows.
-    async fn remaining_leave_days(&self, company: Uuid, employee_id: Uuid)
-        -> Result<Decimal, sqlx::Error>;
+    /// Unused, unexpired leave days of the given leave types (annual leave: the only leave
+    /// PP 35/2021 Pasal 40(4)(a) pays out) — `SUM(allocated - used)` over the employee's
+    /// non-deleted `timeoff.timeoff_balances` rows whose type code is in `leave_type_codes` and
+    /// that had not expired by `as_of`. Returns `0` when there are none.
+    async fn unused_leave_days(
+        &self,
+        company: Uuid,
+        employee_id: Uuid,
+        leave_type_codes: &[String],
+        as_of: NaiveDate,
+    ) -> Result<Decimal, sqlx::Error>;
 }
 
 /// Default pool-backed [`OffboardingInputs`] — scalar SQL reads against the employee / payroll /
@@ -156,6 +165,7 @@ impl OffboardingInputs for PoolOffboardingInputs {
                     WHERE employee_id = $1
                       AND org_unit_id = ANY($2)
                       AND new_amount IS NOT NULL
+                      AND change_type::text <> 'offboarding'
                       AND (metadata->>'deleted_at') IS NULL
                     ORDER BY effective_date DESC NULLS LAST,
                              (metadata->>'created_at') DESC NULLS LAST
@@ -167,23 +177,32 @@ impl OffboardingInputs for PoolOffboardingInputs {
         .await
     }
 
-    async fn remaining_leave_days(
+    async fn unused_leave_days(
         &self,
         company: Uuid,
         employee_id: Uuid,
+        leave_type_codes: &[String],
+        as_of: NaiveDate,
     ) -> Result<Decimal, sqlx::Error> {
-        // COALESCE turns "no balance rows" into 0 (no leave to pay out) rather than NULL.
+        // COALESCE turns "no balance rows" into 0 (no leave to pay out) rather than NULL. A
+        // balance counts while it had not expired by the last working day.
         self.scoped_scalar(
             company,
             sqlx::query_scalar(
-                r#"SELECT COALESCE(SUM(allocated - used), 0)
-                     FROM timeoff.timeoff_balances
-                    WHERE employee_id = $1
-                      AND org_unit_id = ANY($2)
-                      AND (metadata->>'deleted_at') IS NULL"#,
+                r#"SELECT COALESCE(SUM(b.allocated - b.used), 0)
+                     FROM timeoff.timeoff_balances b
+                     JOIN timeoff.timeoff_types t ON t.id = b.timeoff_type_id
+                    WHERE b.employee_id = $1
+                      AND b.org_unit_id = ANY($2)
+                      AND t.code = ANY($3)
+                      AND (b.expired_at IS NULL OR b.expired_at::date > $4)
+                      AND (b.metadata->>'deleted_at') IS NULL
+                      AND (t.metadata->>'deleted_at') IS NULL"#,
             )
             .bind(employee_id)
-            .bind(Self::scope_units(company)),
+            .bind(Self::scope_units(company))
+            .bind(leave_type_codes.to_vec())
+            .bind(as_of),
         )
         .await
         .map(|d| d.unwrap_or(Decimal::ZERO))

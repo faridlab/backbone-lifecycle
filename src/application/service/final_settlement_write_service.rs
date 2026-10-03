@@ -3,9 +3,10 @@
 //! Two verbs, both scoped by whatever request scope the composing service has bound:
 //!
 //! - [`FinalSettlementWriteService::draft_from_offboarding`] assembles the leaver's
-//!   final pay packet from the SAME cross-module inputs the close verb used
-//!   ([`OffboardingInputs`] + the pure pesangon calc), so the settlement row and
-//!   the `offboarding.closed` event payload can never disagree. One settlement
+//!   final pay packet through the SAME function the close verb uses
+//!   ([`compute_for_offboarding`]: the [`OffboardingInputs`] reads, the statutory
+//!   set in force on the last working day, the company settings, the pure calc),
+//!   so the settlement row and the `offboarding.closed` event payload agree. One settlement
 //!   per offboarding — enforced by a partial unique index, surfaced here as a
 //!   409 carrying the existing row's id.
 //! - [`FinalSettlementWriteService::confirm`] turns a draft into a balanced GL
@@ -24,9 +25,9 @@
 //! through payroll, not this envelope):
 //!
 //! ```text
-//! Dr severance-expense account        pesangon (severance total)
+//! Dr severance-expense account        pesangon_amount (uang pesangon + UPMK + uang pisah)
 //! Dr leave-encashment-expense account unused-leave payout
-//! Cr employee-payable account         pesangon + leave payout
+//! Cr employee-payable account         pesangon_amount + leave payout (= net_payable)
 //! ```
 //!
 //! Tax withholding is deliberately NOT wired yet: a drafted deduction > 0 fails
@@ -43,15 +44,15 @@
 //! This is a user-owned custom file — it is NEVER regenerated.
 
 use crate::application::service::offboarding_ports::OffboardingInputs;
-use crate::application::service::pesangon::{money, pesangon, PesangonConfig};
-use crate::domain::entity::OffboardingReason;
+use crate::application::service::settlement_computation::{
+    compute_for_offboarding, SettlementComputeError,
+};
 use backbone_gl_posting::{
     AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink,
 };
-use chrono::{Datelike, Utc};
+use chrono::Utc;
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
-use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -88,8 +89,9 @@ pub enum FinalSettlementError {
     /// The offboarding reason could not be parsed back into the typed enum.
     #[error("invalid offboarding reason '{0}'")]
     BadReason(String),
-    /// The pesangon calc rejected the reason.
-    #[error("pesangon calc: {0}")]
+    /// The settlement could not be computed (an unspecific reason, no statutory set in force,
+    /// an unusable setting).
+    #[error("{0}")]
     Pesangon(#[from] crate::application::service::pesangon::PesangonError),
     /// The settlement is not `draft` (only a draft may be confirmed; an already-confirmed
     /// one is a no-op via `Ok(None)`).
@@ -129,7 +131,7 @@ impl FinalSettlementError {
             FinalSettlementError::MissingJoinDate { .. } => "missing_join_date",
             FinalSettlementError::MissingSalary { .. } => "missing_salary",
             FinalSettlementError::BadReason(_) => "invalid_offboarding_reason",
-            FinalSettlementError::Pesangon(_) => "pesangon_calc_error",
+            FinalSettlementError::Pesangon(e) => e.code(),
             FinalSettlementError::NotDraft { .. } => "settlement_not_draft",
             FinalSettlementError::NothingToPost(_) => "nothing_to_post",
             FinalSettlementError::TaxRequiresAccount(_, _) => "tax_requires_account",
@@ -146,8 +148,8 @@ impl FinalSettlementError {
             FinalSettlementError::AlreadyDrafted { .. } => 409,
             FinalSettlementError::MissingJoinDate { .. }
             | FinalSettlementError::MissingSalary { .. }
-            | FinalSettlementError::BadReason(_)
-            | FinalSettlementError::Pesangon(_) => 422,
+            | FinalSettlementError::BadReason(_) => 422,
+            FinalSettlementError::Pesangon(e) => e.http_status(),
             FinalSettlementError::NotDraft { .. }
             | FinalSettlementError::NothingToPost(_)
             | FinalSettlementError::TaxRequiresAccount(_, _)
@@ -177,13 +179,11 @@ pub struct SettlementAccounts {
 
 /// The lifecycle write-service that owns the final-settlement draft + GL confirmation.
 ///
-/// Construct with [`FinalSettlementWriteService::new`] (full: pool + inputs port +
-/// pesangon config + GL sink) or [`FinalSettlementWriteService::with_pool`]
-/// (defaults: pool-backed inputs + current-law config + unwired GL sink).
+/// Construct with [`FinalSettlementWriteService::new`] (pool + inputs port + GL sink)
+/// or [`FinalSettlementWriteService::with_pool`] (pool-backed inputs + unwired GL sink).
 pub struct FinalSettlementWriteService {
     pool: PgPool,
     inputs: Arc<dyn OffboardingInputs>,
-    cfg: PesangonConfig,
     gl: Arc<dyn GlPostSink>,
 }
 
@@ -194,36 +194,20 @@ impl FinalSettlementWriteService {
         crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
     }
 
-    /// Create a new write-service bound to the given pool, inputs port, config, and GL sink.
-    pub fn new(
-        pool: PgPool,
-        inputs: Arc<dyn OffboardingInputs>,
-        cfg: PesangonConfig,
-        gl: Arc<dyn GlPostSink>,
-    ) -> Self {
-        Self {
-            pool,
-            inputs,
-            cfg,
-            gl,
-        }
+    /// Create a new write-service bound to the given pool, inputs port, and GL sink.
+    pub fn new(pool: PgPool, inputs: Arc<dyn OffboardingInputs>, gl: Arc<dyn GlPostSink>) -> Self {
+        Self { pool, inputs, gl }
     }
 
-    /// Convenience: pool-backed [`OffboardingInputs`] + current-law [`PesangonConfig`]
-    /// defaults + the unwired GL sink (posting fails loudly with `gl_seam_unwired` until a
-    /// real sink is supplied).
+    /// Convenience: pool-backed [`OffboardingInputs`] + the unwired GL sink (posting fails
+    /// loudly with `gl_seam_unwired` until a real sink is supplied).
     pub fn with_pool(pool: PgPool) -> Self {
         let inputs = Arc::new(
             crate::application::service::offboarding_ports::PoolOffboardingInputs::new(
                 pool.clone(),
             ),
         );
-        Self::new(
-            pool,
-            inputs,
-            PesangonConfig::default(),
-            Arc::new(UnwiredGlSink),
-        )
+        Self::new(pool, inputs, Arc::new(UnwiredGlSink))
     }
 
     /// Replace the GL sink (the composition-time wiring point for accounting's adapter).
@@ -244,18 +228,20 @@ impl FinalSettlementWriteService {
 
     /// Draft the leaver's final settlement from a closed offboarding — idempotently.
     ///
-    /// Assembles from the same inputs the close verb used (join date, current salary,
-    /// remaining leave — through [`OffboardingInputs`]) plus the shared pesangon calc,
-    /// so the row can never disagree with the `offboarding.closed` event payload:
-    /// - `base_pay`: calendar-day proration of the final month:
-    ///   `day_of(last_working_day) / days_in_month(last_working_day) × monthly_salary`
-    ///   (informational — the final-period salary flows through the payroll
-    ///   lane, never this settlement's envelope)
-    /// - `pesangon_amount`: pesangon + UPMK + UPM (severance proper; leave is separate)
-    /// - `unused_leave_payout`: the calc's leave payout
-    /// - `net_payable`: pesangon + leave payout — exactly what the confirm
-    ///   envelope credits and mark-paid acknowledges, so the books and the
-    ///   row can never disagree on what this settlement owes the leaver
+    /// Assembles through [`compute_for_offboarding`] — the function the close verb uses —
+    /// so the row agrees with the `offboarding.closed` event payload:
+    /// - `uang_pesangon`, `upmk`, `uang_pisah`: the PP 35/2021 items; `pesangon_amount`
+    ///   is their sum (the severance total the confirmation posts)
+    /// - `unused_leave_payout`: unused annual leave × `daily_wage`
+    /// - `base_pay`: the last pay — working days from the later of the join date and
+    ///   the month start through the last working day, at `daily_wage`; zero when the
+    ///   employee never started. Paid by payroll (`last_pay_via_payroll = true`), so
+    ///   it is NOT in net_payable
+    /// - `net_payable`: `pesangon_amount + unused_leave_payout` — exactly what the
+    ///   confirm envelope credits and mark-paid acknowledges
+    /// - `monthly_wage`, `daily_wage`, `work_days_per_week`, `unused_leave_days`,
+    ///   `tenure_years`, `legal_basis`, `statutory_effective_from`: the inputs, so the
+    ///   row audits on its own
     /// - `period`: `YYYY-MM` of the last working day
     ///
     /// # Returns
@@ -299,52 +285,19 @@ impl FinalSettlementWriteService {
         let reason: String = row.try_get("reason")?;
         let last_working_day: chrono::NaiveDate = row.try_get("last_working_day")?;
 
-        // Same cross-module inputs as the close verb, gathered before any write so a
-        // missing prerequisite fails closed (no partial settlement row). The input
-        // tables are not stripped — they keep their own company fences, so the reads
-        // carry the legacy company id explicitly.
-        let join_date = self
-            .inputs
-            .join_date(company_id, employee_id)
-            .await?
-            .ok_or(FinalSettlementError::MissingJoinDate { employee_id })?;
-        let monthly_salary = self
-            .inputs
-            .current_monthly_salary(company_id, employee_id)
-            .await?
-            .ok_or(FinalSettlementError::MissingSalary { employee_id })?;
-        let unused_leave_days = self
-            .inputs
-            .remaining_leave_days(company_id, employee_id)
-            .await?;
-
-        let tenure = crate::application::service::offboarding_write_service::tenure_years(
-            join_date,
+        // The same assembly as the close verb, before any write, so a missing prerequisite
+        // fails closed (no partial settlement row). The input tables are not stripped — they
+        // keep their own company fences, so the reads carry the legacy company id explicitly.
+        let b = compute_for_offboarding(
+            self.inputs.as_ref(),
+            &mut tx,
+            company_id,
+            employee_id,
+            &reason,
             last_working_day,
-        );
-        let reason_enum = OffboardingReason::from_str(&reason)
-            .map_err(|_| FinalSettlementError::BadReason(reason.clone()))?;
-        let breakdown = pesangon(
-            reason_enum,
-            tenure,
-            monthly_salary,
-            unused_leave_days,
-            &self.cfg,
-        )?;
-
-        // Final-period base pay: calendar-day proration of the leaving month.
-        let base_pay = money(
-            monthly_salary * Decimal::from(last_working_day.day())
-                / Decimal::from(last_working_day.num_days_in_month()),
-        );
-        // Severance proper (pesangon + UPMK + UPM); the leave payout is its own column.
-        let pesangon_amount = money(breakdown.pesangon + breakdown.upmk + breakdown.upm);
-        let unused_leave_payout = money(breakdown.unused_leave_payout);
-        // The payable this settlement actually books and pays: the severance
-        // items only. base_pay rides its own column as payroll-lane
-        // information — folding it in would make the row promise more than
-        // the confirm envelope ever credits.
-        let net_payable = money(pesangon_amount + unused_leave_payout);
+        )
+        .await
+        .map_err(FinalSettlementError::from)?;
         let period = last_working_day.format("%Y-%m").to_string();
 
         // One live settlement per offboarding. The partial unique index
@@ -355,8 +308,12 @@ impl FinalSettlementWriteService {
             r#"INSERT INTO lifecycle.final_settlements
                    (id, employee_id, offboarding_id, period, base_pay,
                     unused_leave_payout, pesangon_amount, tax_deduction, net_payable,
-                    status, metadata)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, 'draft', $9::jsonb)
+                    status, metadata,
+                    uang_pesangon, upmk, uang_pisah, monthly_wage, daily_wage,
+                    work_days_per_week, unused_leave_days, tenure_years, legal_basis,
+                    statutory_effective_from, last_pay_via_payroll)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, 'draft', $9::jsonb,
+                       $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                ON CONFLICT (offboarding_id)
                     WHERE (metadata->>'deleted_at') IS NULL
                DO NOTHING
@@ -366,14 +323,25 @@ impl FinalSettlementWriteService {
         .bind(employee_id)
         .bind(offboarding_id)
         .bind(&period)
-        .bind(base_pay)
-        .bind(unused_leave_payout)
-        .bind(pesangon_amount)
-        .bind(net_payable)
+        .bind(b.last_pay)
+        .bind(b.unused_leave_payout)
+        .bind(b.severance_total)
+        .bind(b.net_payable)
         .bind(
             r#"{"created_at":null,"updated_at":null,"deleted_at":null,
                 "created_by":null,"updated_by":null,"deleted_by":null}"#,
         )
+        .bind(b.uang_pesangon)
+        .bind(b.upmk)
+        .bind(b.uang_pisah)
+        .bind(b.monthly_wage)
+        .bind(b.daily_wage)
+        .bind(i32::from(b.work_days_per_week))
+        .bind(b.unused_leave_days)
+        .bind(b.tenure_years)
+        .bind(&b.legal_basis)
+        .bind(b.statutory_effective_from)
+        .bind(b.last_pay_via_payroll)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -631,6 +599,22 @@ impl GlPostSink for UnwiredGlSink {
             message: "the GL seam is not wired — supply a GlPostSink to confirm settlements"
                 .to_string(),
         })
+    }
+}
+
+impl From<SettlementComputeError> for FinalSettlementError {
+    fn from(e: SettlementComputeError) -> Self {
+        match e {
+            SettlementComputeError::MissingJoinDate { employee_id } => {
+                FinalSettlementError::MissingJoinDate { employee_id }
+            }
+            SettlementComputeError::MissingSalary { employee_id } => {
+                FinalSettlementError::MissingSalary { employee_id }
+            }
+            SettlementComputeError::BadReason(r) => FinalSettlementError::BadReason(r),
+            SettlementComputeError::Pesangon(p) => FinalSettlementError::Pesangon(p),
+            SettlementComputeError::Db(d) => FinalSettlementError::Db(d),
+        }
     }
 }
 

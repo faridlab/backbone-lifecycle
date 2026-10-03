@@ -46,13 +46,19 @@ async fn scoped<R>(
     with_org_request_scope(pool, OrgScope::for_company_unit(company_id), f).await
 }
 
-/// Connect to a scratch DB this suite owns, or `None` to skip.
+/// Connect to a scratch DB this test owns, or `None` to skip.
 ///
 /// The suite builds its own minimal DDL (see [`setup`]), which must NOT run against a
 /// fully-migrated database: the real migrations carry stricter constraints than the
 /// best-effort shapes here, and the two disagree (a migrated `promotions.title`-style
-/// NOT NULL, for instance, breaks the hermetic seeds). So the suite provisions a
+/// NOT NULL, for instance, breaks the hermetic seeds). So each test provisions a
 /// dedicated database it drops and recreates on every run — hermetic by construction.
+///
+/// One database PER TEST, named after the test: cargo runs the tests of this file in
+/// parallel, and a single shared scratch database made them drop each other's database
+/// and truncate each other's rows mid-flight (the losers then skipped, which read as
+/// green). The test harness names each test's thread after the test, and a
+/// `#[tokio::test]` body runs on that thread, so the name is available here.
 ///
 /// Set `LIFECYCLE_REQUIRE_DB=1` (CI does) to turn any skip into a hard failure —
 /// a silently-skipped suite must never read as "tests green" on a machine that
@@ -80,7 +86,8 @@ async fn connect() -> Option<PgPool> {
             return None;
         }
     };
-    let scratch = "lifecycle_flows_test";
+    let scratch = scratch_db_name();
+    let scratch = scratch.as_str();
     let _ = sqlx::query(&format!(
         r#"DROP DATABASE IF EXISTS "{scratch}" WITH (FORCE)"#
     ))
@@ -107,6 +114,27 @@ async fn connect() -> Option<PgPool> {
             None
         }
     }
+}
+
+/// `lifecycle_flows_<test name>`, cut to Postgres' 63-byte identifier limit with a hash of
+/// the full name so two long names never collide.
+fn scratch_db_name() -> String {
+    use std::hash::{Hash, Hasher};
+    let test = std::thread::current()
+        .name()
+        .unwrap_or("main")
+        .rsplit("::")
+        .next()
+        .unwrap_or("main")
+        .to_string();
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    test.hash(&mut h);
+    let short: String = test
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
+        .take(36)
+        .collect();
+    format!("lifecycle_flows_{short}_{:08x}", h.finish() as u32)
 }
 
 /// Run the framework outbox migration, retrying the narrow race where a sibling test's concurrent
@@ -301,6 +329,75 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
         let _ = sqlx::query(stmt).execute(pool).await;
     }
 
+    // The sibling tables are org-unit keyed in production (the settlement input reads fence on
+    // `org_unit_id`, and the payroll consumer writes it). The seeds here name a company; a
+    // company's own unit carries the company's id, so a fill trigger keeps the two columns equal
+    // whichever one an INSERT supplies — and, like the production fill trigger, falls back to
+    // the acting unit of the bound org scope when an INSERT supplies neither.
+    sqlx::raw_sql(
+        r#"CREATE OR REPLACE FUNCTION public.test_fill_org_unit() RETURNS trigger AS $$
+           BEGIN
+             NEW.org_unit_id := COALESCE(NEW.org_unit_id, NEW.company_id,
+                                         NULLIF(current_setting('app.acting_unit_id', true), '')::uuid);
+             NEW.company_id := COALESCE(NEW.company_id, NEW.org_unit_id);
+             RETURN NEW;
+           END $$ LANGUAGE plpgsql"#,
+    )
+    .execute(pool)
+    .await?;
+    for table in [
+        "employee.employments",
+        "employee.employment_histories",
+        "employee.employees",
+        "payroll.compensation_changes",
+        "timeoff.timeoff_balances",
+    ] {
+        for stmt in [
+            format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS org_unit_id UUID"),
+            format!("ALTER TABLE {table} ALTER COLUMN company_id DROP NOT NULL"),
+            format!(
+                "CREATE OR REPLACE TRIGGER fill_org_unit BEFORE INSERT ON {table} \
+                 FOR EACH ROW EXECUTE FUNCTION public.test_fill_org_unit()"
+            ),
+        ] {
+            sqlx::query(&stmt).execute(pool).await?;
+        }
+    }
+
+    // Leave types: only annual leave is paid out, and only while unexpired.
+    for stmt in [
+        r#"CREATE TABLE IF NOT EXISTS timeoff.timeoff_types (
+               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               name TEXT NOT NULL DEFAULT '',
+               code TEXT,
+               metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+           )"#,
+        "ALTER TABLE timeoff.timeoff_balances ADD COLUMN IF NOT EXISTS expired_at TIMESTAMPTZ",
+        // The composing platform's settings store (the settlement reads its group).
+        "CREATE SCHEMA IF NOT EXISTS platform",
+        r#"CREATE TABLE IF NOT EXISTS platform.sysparams (
+               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               group_name TEXT NOT NULL,
+               key TEXT NOT NULL,
+               value TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT 'active',
+               UNIQUE (group_name, key)
+           )"#,
+    ] {
+        let _ = sqlx::query(stmt).execute(pool).await;
+    }
+
+    // The module's own hand-written migrations for the settlement: the widened reason, the
+    // effective-dated PP 35/2021 tables with their seeded law data, and the itemised
+    // settlement columns — the shipped files, not copies.
+    for sql in [
+        include_str!("../migrations/20261003100000_widen_offboarding_reason.up.sql"),
+        include_str!("../migrations/20261003100001_create_severance_statutory_tables.up.sql"),
+        include_str!("../migrations/20261003100002_add_final_settlement_breakdown.up.sql"),
+    ] {
+        sqlx::raw_sql(sql).execute(pool).await?;
+    }
+
     // Outbox + inbox tables (framework DDL) in every schema the flows touch. `timeoff` is a
     // CONSUMER schema (its outbox_events is unused) — we migrate it so its `inbox_consumed` exists for
     // the offboarding-encash handler's `inbox::once`.
@@ -311,13 +408,22 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
     Ok(())
 }
 
+/// Seed a leave type with the given code and return its id (`ANNUAL` is what the settlement pays
+/// out by default).
+async fn seed_leave_type(pool: &PgPool, code: &str) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar("INSERT INTO timeoff.timeoff_types (name, code) VALUES ($1, $1) RETURNING id")
+        .bind(code)
+        .fetch_one(pool)
+        .await
+}
+
 /// Isolate a flow from any prior data in the shared shapes.
 async fn truncate_all(pool: &PgPool) -> sqlx::Result<()> {
     for stmt in [
         "TRUNCATE lifecycle.promotions, lifecycle.onboardings, lifecycle.onboarding_tasks, lifecycle.offboardings, lifecycle.clearance_items, lifecycle.final_settlements",
         "TRUNCATE employee.employment_histories, employee.employments, employee.employees",
         "TRUNCATE payroll.compensation_changes",
-        "TRUNCATE timeoff.timeoff_balances",
+        "TRUNCATE timeoff.timeoff_balances, timeoff.timeoff_types, platform.sysparams",
         "TRUNCATE lifecycle.outbox_events, employee.inbox_consumed, payroll.inbox_consumed, timeoff.inbox_consumed",
     ] {
         sqlx::query(stmt).execute(pool).await?;
@@ -753,9 +859,8 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     let company_id = Uuid::new_v4();
     let employee_id = Uuid::new_v4();
 
-    // ── Seed the three pesangon inputs ─────────────────────────────────────────────────────
-    // join_date 2020-01-01 → last_working_day 2024-01-01 is exactly 1461 days (2020 is a leap
-    // year), and 1461 / 365.25 = 4.000 tenure years. A clean, hand-computable tenure.
+    // ── Seed the three settlement inputs ───────────────────────────────────────────────────
+    // join_date 2020-01-01 → last_working_day 2024-01-01 (inclusive) is four completed years.
     sqlx::query(
         r#"INSERT INTO employee.employments (company_id, employee_id, join_date, status)
            VALUES ($1,$2,'2020-01-01','active')"#,
@@ -765,7 +870,7 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     .execute(&pool)
     .await?;
 
-    // Current monthly salary = 22,000,000 (22M / 22 working days = 1,000,000/day — clean leave rate).
+    // Current monthly salary = 22,000,000 (daily wage 22M / 21 = 1,047,619.05, five-day week).
     sqlx::query(
         r#"INSERT INTO payroll.compensation_changes
                (company_id, employee_id, change_type, new_amount, effective_date)
@@ -784,7 +889,7 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     )
     .bind(company_id)
     .bind(employee_id)
-    .bind(Uuid::new_v4())
+    .bind(seed_leave_type(&pool, "ANNUAL").await?)
     .execute(&pool)
     .await?;
 
@@ -799,7 +904,7 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     .get("id");
 
     // ── 1. PRODUCER ───────────────────────────────────────────────────────────────────────────
-    // with_pool = pool-backed inputs + current-law pesangon config (the same wiring the lifecycle
+    // with_pool = pool-backed inputs; the statutory set comes from the seeded tables (the same wiring the lifecycle
     // module builder uses by default).
     let svc = OffboardingWriteService::with_pool(pool.clone());
     let event_id = scoped(&pool, company_id, svc.close(offboarding_id))
@@ -829,8 +934,8 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     let carried_total = carried_total_str.parse::<Decimal>().expect("total parses");
     assert_eq!(
         carried_total,
-        Decimal::new(207_400_000, 0),
-        "payload carries the real pesangon total"
+        Decimal::from_str_exact("159238095.25").unwrap(),
+        "payload carries the settlement total"
     );
 
     // ── 2. RELAY → CONSUMERS (employee + payroll) ─────────────────────────────────────────────
@@ -859,12 +964,12 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
             .await?;
     assert_eq!(emp_status, "inactive", "employment deactivated on close");
 
-    // Hand-computed 🇮🇩 pesangon for efficiency / 4.000yr tenure / 22M salary / 5 unused leave days:
-    //   UPMK     = upmk_scale(4) × 22M         = 4 × 22M   =  88,000,000
-    //   pesangon = min(1×4×22M, 8×22M=176M)    =           =  88,000,000
-    //   UPM      = 0.15 × (88M + 88M)          =           =  26,400,000
-    //   leave    = 5 × (22M / 22)              =           =   5,000,000
-    //   total    = 88M + 88M + 26.4M + 5M      =           = 207,400,000
+    // Hand-computed for `efficiency` (settled as PP 35/2021 Pasal 43(2): pesangon 1x, UPMK 1x),
+    // four completed years, 22M wage, 5 unused annual-leave days:
+    //   uang pesangon = Pasal 40(2) 4-<5 years = 5 months × 22M  = 110,000,000
+    //   UPMK          = Pasal 40(3) 3-<6 years = 2 months × 22M  =  44,000,000
+    //   leave         = 5 × round(22M / 21) = 5 × 1,047,619.05   =   5,238,095.25
+    //   total         = 110M + 44M + 5,238,095.25               = 159,238,095.25
     let row: (String, Decimal) = sqlx::query_as(
         r#"SELECT change_type::text AS change_type, new_amount
              FROM payroll.compensation_changes WHERE reference_id=$1"#,
@@ -878,8 +983,8 @@ async fn offboarding_closed_flow_deactivates_and_settles_and_is_idempotent(
     );
     assert_eq!(
         row.1,
-        Decimal::new(207_400_000, 0),
-        "settlement new_amount is the real pesangon total"
+        Decimal::from_str_exact("159238095.25").unwrap(),
+        "settlement new_amount is the carried total"
     );
 
     let cc_count: i64 = sqlx::query_scalar(
@@ -975,7 +1080,7 @@ async fn offboarding_closed_also_zeroes_leave_balance_and_is_idempotent(
     )
     .bind(company_id)
     .bind(employee_id)
-    .bind(Uuid::new_v4())
+    .bind(seed_leave_type(&pool, "ANNUAL").await?)
     .execute(&pool)
     .await?;
 
@@ -1603,7 +1708,7 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     )
     .bind(company_id)
     .bind(employee_id)
-    .bind(Uuid::new_v4())
+    .bind(seed_leave_type(&pool, "ANNUAL").await?)
     .execute(&pool)
     .await?;
     let offboarding_id: Uuid = sqlx::query(
@@ -1621,9 +1726,9 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     let settlement_id = scoped(&pool, company_id, svc.draft_from_offboarding(offboarding_id))
         .await??;
 
-    // base_pay = 22M × 1/31 (2024-01-01, 31-day month) = 709,677.42
-    // pesangon_amount = 88M + 88M + 26.4M = 202,400,000 · leave = 5,000,000
-    // net = 207,400,000 (severance items only — base pay flows through the
+    // base_pay (last pay) = 1 working day (Monday 2024-01-01) × 1,047,619.05
+    // pesangon_amount = 110M uang pesangon + 44M UPMK = 154,000,000 · leave = 5,238,095.25
+    // net = 159,238,095.25 (severance items only — the last pay flows through the
     // payroll lane, never this settlement's envelope)
     let row = sqlx::query(
         r#"SELECT period, base_pay, unused_leave_payout, pesangon_amount, net_payable,
@@ -1636,19 +1741,19 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     assert_eq!(row.get::<String, _>("period"), "2024-01");
     assert_eq!(
         row.get::<Decimal, _>("base_pay"),
-        Decimal::from_str_exact("709677.42").unwrap()
+        Decimal::from_str_exact("1047619.05").unwrap()
     );
     assert_eq!(
         row.get::<Decimal, _>("pesangon_amount"),
-        Decimal::new(202_400_000, 0)
+        Decimal::new(154_000_000, 0)
     );
     assert_eq!(
         row.get::<Decimal, _>("unused_leave_payout"),
-        Decimal::new(5_000_000, 0)
+        Decimal::from_str_exact("5238095.25").unwrap()
     );
     assert_eq!(
         row.get::<Decimal, _>("net_payable"),
-        Decimal::from_str_exact("207400000.00").unwrap()
+        Decimal::from_str_exact("159238095.25").unwrap()
     );
     assert_eq!(row.get::<String, _>("status"), "draft");
     assert!(row.get::<Option<Uuid>, _>("accounting_post_id").is_none());
@@ -1750,8 +1855,8 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     let total_debit: Decimal = envelope.lines.iter().map(|l| l.debit).sum();
     assert_eq!(
         total_debit,
-        Decimal::new(207_400_000, 0),
-        "severance 202.4M + leave 5M"
+        Decimal::from_str_exact("159238095.25").unwrap(),
+        "severance 154M + leave 5,238,095.25"
     );
 
     // Producer idempotency: a re-confirm sends no second envelope.
@@ -1974,5 +2079,404 @@ async fn producers_fail_closed_without_a_bound_org_scope() -> Result<(), Box<dyn
         0,
         "no event staged by an unscoped call"
     );
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// PP 35/2021 settlement: the event and the row agree, settings apply, refusals hold
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Seed one leaver: an employment, a salary row, leave balances by type code, and a cleared
+/// offboarding. Returns the offboarding id.
+#[allow(clippy::too_many_arguments)]
+async fn seed_leaver(
+    pool: &PgPool,
+    company_id: Uuid,
+    employee_id: Uuid,
+    join_date: &str,
+    salary: i64,
+    reason: &str,
+    last_working_day: &str,
+    leave: &[(&str, i64)],
+) -> sqlx::Result<Uuid> {
+    sqlx::query(
+        r#"INSERT INTO employee.employments (company_id, employee_id, join_date, status)
+           VALUES ($1,$2,$3::date,'active')"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .bind(join_date)
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO payroll.compensation_changes
+               (company_id, employee_id, change_type, new_amount, effective_date)
+           VALUES ($1,$2,'hire'::compensation_change_type,$3,$4::date)"#,
+    )
+    .bind(company_id)
+    .bind(employee_id)
+    .bind(Decimal::from(salary))
+    .bind(join_date)
+    .execute(pool)
+    .await?;
+    for (code, days) in leave {
+        let type_id = seed_leave_type(pool, code).await?;
+        sqlx::query(
+            r#"INSERT INTO timeoff.timeoff_balances
+                   (company_id, employee_id, timeoff_type_id, period, allocated, used)
+               VALUES ($1,$2,$3,'2026',$4,0)"#,
+        )
+        .bind(company_id)
+        .bind(employee_id)
+        .bind(type_id)
+        .bind(Decimal::from(*days))
+        .execute(pool)
+        .await?;
+    }
+    let id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO lifecycle.offboardings
+               (employee_id, reason, notice_date, last_working_day, status)
+           VALUES ($1,$2::offboarding_reason,$3::date,$3::date,'cleared') RETURNING id"#,
+    )
+    .bind(employee_id)
+    .bind(reason)
+    .bind(last_working_day)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+async fn set_setting(pool: &PgPool, key: &str, value: &str) -> sqlx::Result<()> {
+    sqlx::query(
+        r#"INSERT INTO platform.sysparams (group_name, key, value) VALUES ('lifecycle.offboarding',$1,$2)
+           ON CONFLICT (group_name, key) DO UPDATE SET value = EXCLUDED.value"#,
+    )
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+fn dec(s: &str) -> Decimal {
+    Decimal::from_str_exact(s).unwrap()
+}
+
+/// A payload number (the producer serialises Decimals as JSON numbers) as a Decimal.
+fn payload_dec(v: &serde_json::Value, field: &str) -> Decimal {
+    let raw = &v[field];
+    raw.as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| raw.to_string())
+        .parse::<Decimal>()
+        .unwrap_or_else(|e| panic!("payload field {field} = {raw}: {e}"))
+}
+
+#[tokio::test]
+async fn closed_payload_and_drafted_settlement_agree_under_company_settings(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::FinalSettlementWriteService;
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+
+    // A voluntary resignation after three completed years, 10M wage, 12 annual-leave days and
+    // 30 sick-leave days (sick leave is not paid out). The company pays one month of uang pisah
+    // and works a six-day week.
+    set_setting(&pool, "uang_pisah.months", "1").await?;
+    set_setting(&pool, "daily_wage.work_days_per_week", "6").await?;
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    let offboarding_id = seed_leaver(
+        &pool, company_id, employee_id, "2023-04-10", 10_000_000, "resignation", "2026-10-07",
+        &[("ANNUAL", 12), ("SICK", 30)],
+    )
+    .await?;
+
+    // Close → the event; relay it through payroll's settlement consumer.
+    let svc = OffboardingWriteService::with_pool(pool.clone());
+    let event_id = scoped(&pool, company_id, svc.close(offboarding_id))
+        .await??
+        .expect("fresh close stages an event");
+    let bus = IntegrationEventBus::new();
+    bus.register_handler(std::sync::Arc::new(
+        backbone_payroll::application::OffboardingSettlementHandler::new(pool.clone()),
+    ))
+    .await;
+    assert_eq!(drain_lifecycle(&pool, bus).await?, 1);
+
+    // Draft AFTER the consumer has written its `offboarding` compensation row: the wage read
+    // must skip it (it is a settlement total, not a salary).
+    let settlements = FinalSettlementWriteService::with_pool(pool.clone());
+    let settlement_id =
+        scoped(&pool, company_id, settlements.draft_from_offboarding(offboarding_id)).await??;
+
+    // Hand-computed (PP 35/2021 Pasal 50; daily wage 10M / 25 = 400,000):
+    //   uang pesangon 0 · UPMK 0 · uang pisah 1 × 10M = 10,000,000
+    //   leave 12 annual days × 400,000 = 4,800,000 (the 30 sick days are not paid)
+    //   last pay: 1-7 Oct 2026 on a six-day week = 6 days × 400,000 = 2,400,000 (via payroll)
+    //   net payable = 10,000,000 + 4,800,000 = 14,800,000
+    let payload: serde_json::Value =
+        sqlx::query_scalar("SELECT payload FROM lifecycle.outbox_events WHERE id=$1")
+            .bind(event_id)
+            .fetch_one(&pool)
+            .await?;
+    let b = &payload["pesangon_breakdown"];
+    let row = sqlx::query(
+        r#"SELECT base_pay, unused_leave_payout, pesangon_amount, net_payable, uang_pesangon,
+                  upmk, uang_pisah, monthly_wage, daily_wage, work_days_per_week,
+                  unused_leave_days, tenure_years, legal_basis, statutory_effective_from,
+                  last_pay_via_payroll
+             FROM lifecycle.final_settlements WHERE id=$1"#,
+    )
+    .bind(settlement_id)
+    .fetch_one(&pool)
+    .await?;
+
+    let expected = [
+        ("uang_pesangon", "uang_pesangon", "0"),
+        ("upmk", "upmk", "0"),
+        ("uang_pisah", "uang_pisah", "10000000"),
+        ("severance_total", "pesangon_amount", "10000000"),
+        ("unused_leave_payout", "unused_leave_payout", "4800000"),
+        ("last_pay", "base_pay", "2400000"),
+        ("net_payable", "net_payable", "14800000"),
+        ("monthly_wage", "monthly_wage", "10000000"),
+        ("daily_wage", "daily_wage", "400000"),
+        ("unused_leave_days", "unused_leave_days", "12"),
+    ];
+    for (payload_field, column, want) in expected {
+        let from_row: Decimal = row.get(column);
+        assert_eq!(from_row, dec(want), "row {column}");
+        assert_eq!(payload_dec(b, payload_field), from_row, "payload {payload_field} = row {column}");
+    }
+    assert_eq!(payload_dec(b, "total"), dec("14800000"), "the earlier `total` name = net payable");
+    assert_eq!(payload_dec(b, "upm"), Decimal::ZERO, "no UPM under PP 35/2021");
+    assert_eq!(row.get::<i32, _>("work_days_per_week"), 6);
+    assert_eq!(b["work_days_per_week"], serde_json::json!(6));
+    assert_eq!(row.get::<String, _>("legal_basis"), "PP 35/2021 Pasal 50");
+    assert_eq!(b["legal_basis"], serde_json::json!("PP 35/2021 Pasal 50"));
+    assert_eq!(
+        row.get::<chrono::NaiveDate, _>("statutory_effective_from").to_string(),
+        "2021-02-02"
+    );
+    assert!(row.get::<bool, _>("last_pay_via_payroll"));
+    let tenure: Decimal = row.get("tenure_years");
+    assert!(tenure >= dec("3") && tenure < dec("4"), "three completed years, got {tenure}");
+    assert_eq!(payload_dec(b, "tenure_years"), tenure);
+
+    // Payroll recorded the carried total.
+    let recorded: Decimal = sqlx::query_scalar(
+        "SELECT new_amount FROM payroll.compensation_changes WHERE reference_id=$1",
+    )
+    .bind(offboarding_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(recorded, dec("14800000"), "payroll's settlement row is the net payable");
+    Ok(())
+}
+
+#[tokio::test]
+async fn unspecific_termination_refuses_close_and_draft() -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::{FinalSettlementError, FinalSettlementWriteService};
+    use backbone_lifecycle::application::service::OffboardingCloseError;
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    let offboarding_id = seed_leaver(
+        &pool, company_id, employee_id, "2019-01-07", 10_000_000, "termination", "2026-10-07",
+        &[("ANNUAL", 3)],
+    )
+    .await?;
+
+    let err = scoped(&pool, company_id, OffboardingWriteService::with_pool(pool.clone()).close(offboarding_id))
+        .await?
+        .expect_err("termination names no PP 35/2021 case");
+    assert!(matches!(err, OffboardingCloseError::Pesangon(_)), "{err:?}");
+    assert_eq!(err.code(), "unspecific_offboarding_reason");
+    assert_eq!(err.http_status(), 422);
+    let status: String = sqlx::query_scalar("SELECT status::text FROM lifecycle.offboardings WHERE id=$1")
+        .bind(offboarding_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(status, "cleared", "the refused close changed nothing");
+    assert_eq!(outbox::pending_count(&pool, "lifecycle").await?, 0, "no event staged");
+
+    let err = scoped(
+        &pool,
+        company_id,
+        FinalSettlementWriteService::with_pool(pool.clone()).draft_from_offboarding(offboarding_id),
+    )
+    .await?
+    .expect_err("the draft refuses the same way");
+    assert!(matches!(err, FinalSettlementError::Pesangon(_)), "{err:?}");
+    assert_eq!(err.code(), "unspecific_offboarding_reason");
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM lifecycle.final_settlements")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(rows, 0, "no settlement row");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_leaver_who_never_started_settles_at_zero() -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::FinalSettlementWriteService;
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+    set_setting(&pool, "uang_pisah.months", "1").await?;
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    // The hire was due on 2 November; the offboarding's last day is 30 October.
+    let offboarding_id = seed_leaver(
+        &pool, company_id, employee_id, "2026-11-02", 8_500_000, "resignation", "2026-10-30",
+        &[("ANNUAL", 12)],
+    )
+    .await?;
+    let id = scoped(
+        &pool,
+        company_id,
+        FinalSettlementWriteService::with_pool(pool.clone()).draft_from_offboarding(offboarding_id),
+    )
+    .await??;
+    let row: (Decimal, Decimal, Decimal, Decimal, Decimal, Decimal) = sqlx::query_as(
+        r#"SELECT base_pay, pesangon_amount, uang_pisah, unused_leave_payout, net_payable, tenure_years
+             FROM lifecycle.final_settlements WHERE id=$1"#,
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await?;
+    let zero = Decimal::ZERO;
+    assert_eq!(row, (zero, zero, zero, zero, zero, zero), "nothing is owed to a leaver who never started");
+    Ok(())
+}
+
+#[tokio::test]
+async fn statutory_set_resolves_as_of_the_last_working_day_and_fails_closed(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::{FinalSettlementWriteService, PesangonError};
+    use backbone_lifecycle::infrastructure::persistence::severance_params_repository::severance_params_as_of;
+    use chrono::NaiveDate;
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+    let day = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+    let mut conn = pool.acquire().await?;
+
+    // Before PP 35/2021 took effect there is no set: refused, not defaulted.
+    let err = severance_params_as_of(&mut conn, "ID", day("2021-02-01"))
+        .await
+        .expect_err("no set before 2021-02-02");
+    assert!(matches!(err, PesangonError::NoStatutoryParams { .. }), "{err:?}");
+    assert_eq!(err.code(), "no_severance_params");
+    // Another country has no set at all.
+    assert!(severance_params_as_of(&mut conn, "MY", day("2026-10-01")).await.is_err());
+
+    // The seeded set applies from its first day.
+    let p = severance_params_as_of(&mut conn, "ID", day("2021-02-02")).await?;
+    assert_eq!(p.effective_from(), day("2021-02-02"));
+    assert_eq!(p.reasons["retirement"].pesangon_multiplier, dec("1.75"));
+
+    // A newer COMPLETE case set (every row restated, retirement changed) takes over from its
+    // effective date; the day before still reads the old one.
+    sqlx::query(
+        r#"INSERT INTO lifecycle.severance_reason_params
+               (country_code, effective_from, reason_code, pesangon_multiplier, upmk_multiplier,
+                uang_pisah_eligible, article)
+           SELECT country_code, '2030-01-01', reason_code,
+                  CASE WHEN reason_code = 'retirement' THEN 2.00 ELSE pesangon_multiplier END,
+                  upmk_multiplier, uang_pisah_eligible, article
+             FROM lifecycle.severance_reason_params WHERE effective_from = '2021-02-02'"#,
+    )
+    .execute(&pool)
+    .await?;
+    let old = severance_params_as_of(&mut conn, "ID", day("2029-12-31")).await?;
+    assert_eq!(old.reasons["retirement"].pesangon_multiplier, dec("1.75"));
+    let new = severance_params_as_of(&mut conn, "ID", day("2030-01-01")).await?;
+    assert_eq!(new.reasons["retirement"].pesangon_multiplier, dec("2"));
+    assert_eq!(new.effective_from(), day("2030-01-01"));
+    // The scales had no newer set: they still resolve from 2021.
+    assert_eq!(new.upmk_effective_from, day("2021-02-02"));
+
+    // A lone correction row is an incomplete set: refused from its date on.
+    sqlx::query(
+        r#"INSERT INTO lifecycle.severance_reason_params
+               (country_code, effective_from, reason_code, pesangon_multiplier, upmk_multiplier,
+                uang_pisah_eligible, article)
+           VALUES ('ID', '2031-01-01', 'death', 2.5, 1, false, 'a lone correction')"#,
+    )
+    .execute(&pool)
+    .await?;
+    let err = severance_params_as_of(&mut conn, "ID", day("2031-06-01"))
+        .await
+        .expect_err("an incomplete set refuses");
+    assert!(matches!(err, PesangonError::IncompleteStatutoryParams { .. }), "{err:?}");
+    drop(conn);
+
+    // The draft verb surfaces the refusal for a last working day with no set in force.
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    let offboarding_id = seed_leaver(
+        &pool, company_id, employee_id, "2015-01-05", 9_000_000, "retirement", "2020-12-31", &[],
+    )
+    .await?;
+    let err = scoped(
+        &pool,
+        company_id,
+        FinalSettlementWriteService::with_pool(pool.clone()).draft_from_offboarding(offboarding_id),
+    )
+    .await?
+    .expect_err("no statutory set on 2020-12-31");
+    assert_eq!(err.code(), "no_severance_params");
+    assert_eq!(err.http_status(), 422);
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_unusable_setting_refuses_rather_than_paying_the_default(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use backbone_lifecycle::application::service::FinalSettlementWriteService;
+
+    let pool = match connect().await {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+    setup(&pool).await?;
+    truncate_all(&pool).await?;
+    set_setting(&pool, "daily_wage.work_days_per_week", "7").await?;
+    let company_id = Uuid::new_v4();
+    let employee_id = Uuid::new_v4();
+    let offboarding_id = seed_leaver(
+        &pool, company_id, employee_id, "2020-01-06", 10_000_000, "resignation", "2026-10-07",
+        &[("ANNUAL", 2)],
+    )
+    .await?;
+    let err = scoped(
+        &pool,
+        company_id,
+        FinalSettlementWriteService::with_pool(pool.clone()).draft_from_offboarding(offboarding_id),
+    )
+    .await?
+    .expect_err("a seven-day week is not a PP 36/2021 pattern");
+    assert_eq!(err.code(), "invalid_offboarding_setting");
+    assert!(err.to_string().contains("daily_wage.work_days_per_week"), "{err}");
     Ok(())
 }

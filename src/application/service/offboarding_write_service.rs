@@ -1,7 +1,7 @@
 //! Custom write-service — the lifecycle→employee/payroll offboarding handoff (ADR-005 compound events).
 //!
-//! This is the PRODUCER side of the `offboarding.closed` compound event, and it carries the REAL
-//! 🇮🇩 pesangon (severance) breakdown in the payload. [`OffboardingWriteService::close`] is the one
+//! This is the PRODUCER side of the `offboarding.closed` compound event, and it carries the
+//! itemised PP 35/2021 final-settlement breakdown in the payload. [`OffboardingWriteService::close`] is the one
 //! verb with cross-module side effects, and it stages that side effect the transactional-outbox way:
 //! in a SINGLE database transaction it (1) locks the `Offboarding`, (2) asserts `status=cleared`,
 //! (3) flips `status` to `closed`, and (4) stages a [`OFFBOARDING_CLOSED_EVENT_TYPE`] row into
@@ -9,20 +9,25 @@
 //!
 //! ## Producer-carried pesangon (the acyclic design)
 //!
-//! The full pesangon calc lives in [`crate::application::service::pesangon`] (pure, config-driven).
-//! It needs three cross-module inputs: `join_date` (tenure), current monthly salary, and remaining
-//! leave days. Lifecycle OWNS the close + the calc, so the producer gathers those inputs through the
-//! [`OffboardingInputs`] port, runs the calc, and embeds the resulting [`PesangonBreakdown`] in the
-//! event payload. Payroll's consumer then just writes the `CompensationChange` from the carried
-//! breakdown — it does NOT recompute, so payroll never depends on lifecycle and the graph stays
-//! acyclic. (See ADR-005.)
+//! The calc lives in [`crate::application::service::pesangon`] (pure; the statutory numbers come
+//! from the effective-dated `lifecycle.severance_*` tables, the company policy from settings). It
+//! needs three cross-module inputs: `join_date` (tenure), current monthly salary, and unused annual
+//! leave days. Lifecycle OWNS the close + the calc, so the producer assembles everything through
+//! [`crate::application::service::settlement_computation::compute_for_offboarding`] — the same
+//! function the settlement draft uses — and embeds the resulting breakdown in the event payload.
+//! Payroll's consumer then just writes the `CompensationChange` from the carried breakdown — it
+//! does NOT recompute, so payroll never depends on lifecycle and the graph stays acyclic.
+//! (See ADR-005.)
+//!
+//! An offboarding whose reason names no PP 35/2021 case (`termination`) cannot be closed: the
+//! settlement it would carry cannot be computed, and the close refuses rather than emit a guess.
 //!
 //! That in-tx write is the load-bearing invariant: the close transition and the event-emit commit
 //! atomically. The relay (in the composing service) drains the row onto the integration bus; the consumers
 //! apply it idempotently (inbox dedup on the event id):
 //! - `employee.OffboardingClosedHandler` — flips `employments.status` to `inactive`.
 //! - `payroll.OffboardingSettlementHandler` — appends `compensation_changes` (change_type='offboarding',
-//!   `new_amount` = the carried pesangon `total`, note carrying the full breakdown).
+//!   `new_amount` = the carried `total` (= the settlement's net payable), note carrying the items).
 //!
 //! Tenancy: none, by design (ADR-0029). The module carries no scoping column; a composing service
 //! that decorates these tables org-scoped has its middleware bind an org request scope, which every
@@ -33,24 +38,18 @@
 //! This is a user-owned custom file — it is NEVER regenerated.
 
 use crate::application::service::offboarding_ports::OffboardingInputs;
-use crate::application::service::pesangon::{pesangon, PesangonConfig};
-use crate::domain::entity::OffboardingReason;
+use crate::application::service::settlement_computation::{
+    compute_for_offboarding, SettlementComputeError,
+};
 use backbone_outbox::{outbox, OutboxRecord};
 use chrono::Utc;
-use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
-use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
 /// The `event_type` stamped on every offboarding-closed outbox row. Both consumers subscribe to
 /// exactly this pattern (`"offboarding.closed"`).
 pub const OFFBOARDING_CLOSED_EVENT_TYPE: &str = "offboarding.closed";
-
-/// Days-per-year divisor for the tenure calculation (astronomical year length — matches the
-/// 365.25-day basis used by payroll accruals, so a 4-year span with one leap day lands on exactly
-/// 4.000 tenure years). Kept as a string and parsed into a `Decimal` at runtime to stay out of float.
-const DAYS_PER_YEAR: &str = "365.25";
 
 /// Errors from the offboarding write-service.
 #[derive(Debug, thiserror::Error)]
@@ -90,11 +89,12 @@ pub enum OffboardingCloseError {
     /// happen (the column is the enum) — a corrupt row fails loud rather than silently.
     #[error("invalid offboarding reason '{0}'")]
     BadReason(String),
-    /// The pesangon calc rejected the reason (unknown to the config's `reason_rules`).
     /// A precondition this module refuses on (the seam-closure guard).
     #[error("{0}")]
     Invalid(String),
-    #[error("pesangon calc: {0}")]
+    /// The settlement could not be computed (an unspecific reason, no statutory set in force,
+    /// an unusable setting).
+    #[error("{0}")]
     Pesangon(#[from] crate::application::service::pesangon::PesangonError),
     /// A write that must hand a company id to a still-company-keyed sibling seam (the
     /// outbox record, the event payload's `company_id`, the cross-module pesangon input
@@ -124,7 +124,7 @@ impl OffboardingCloseError {
             OffboardingCloseError::MissingSalary { .. } => "missing_salary",
             OffboardingCloseError::BadReason(_) => "invalid_offboarding_reason",
             OffboardingCloseError::Invalid(_) => "offboarding_refused",
-            OffboardingCloseError::Pesangon(_) => "pesangon_calc_error",
+            OffboardingCloseError::Pesangon(e) => e.code(),
             OffboardingCloseError::NoCompanyScope => "no_company_scope",
             OffboardingCloseError::Db(_) | OffboardingCloseError::Outbox(_) => "internal_error",
         }
@@ -139,8 +139,8 @@ impl OffboardingCloseError {
             | OffboardingCloseError::Invalid(_)
             | OffboardingCloseError::MissingJoinDate { .. }
             | OffboardingCloseError::MissingSalary { .. }
-            | OffboardingCloseError::BadReason(_)
-            | OffboardingCloseError::Pesangon(_) => 422,
+            | OffboardingCloseError::BadReason(_) => 422,
+            OffboardingCloseError::Pesangon(e) => e.http_status(),
             OffboardingCloseError::NoCompanyScope
             | OffboardingCloseError::Db(_)
             | OffboardingCloseError::Outbox(_) => 500,
@@ -162,15 +162,14 @@ pub struct NewOffboarding {
 
 /// The lifecycle write-service that owns the offboarding cleared→closed transition + the outbox emit.
 ///
-/// Construct with [`OffboardingWriteService::new`] (full: pool + inputs port + pesangon config) or
-/// [`OffboardingWriteService::with_pool`] (defaults: pool-backed inputs + current-law config). This
+/// Construct with [`OffboardingWriteService::new`] (pool + inputs port) or
+/// [`OffboardingWriteService::with_pool`] (pool-backed inputs). This
 /// is a thin custom service — it does NOT replace the CRUD `OffboardingService`; it adds the one
 /// compound-write verb that has a cross-module side effect (the employment-deactivation +
 /// final-settlement handoff) and computes the carried pesangon.
 pub struct OffboardingWriteService {
     pool: PgPool,
     inputs: Arc<dyn OffboardingInputs>,
-    cfg: PesangonConfig,
     events: std::sync::RwLock<std::sync::Arc<dyn super::lifecycle_events::LifecycleEventSink>>,
 }
 
@@ -181,12 +180,11 @@ impl OffboardingWriteService {
         crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
     }
 
-    /// Create a new write-service bound to the given pool, inputs port, and pesangon config.
-    pub fn new(pool: PgPool, inputs: Arc<dyn OffboardingInputs>, cfg: PesangonConfig) -> Self {
+    /// Create a new write-service bound to the given pool and inputs port.
+    pub fn new(pool: PgPool, inputs: Arc<dyn OffboardingInputs>) -> Self {
         Self {
             pool,
             inputs,
-            cfg,
             events: std::sync::RwLock::new(std::sync::Arc::new(
                 super::lifecycle_events::LoggingSink,
             )),
@@ -198,16 +196,15 @@ impl OffboardingWriteService {
         *self.events.write().expect("lifecycle events lock poisoned") = sink;
     }
 
-    /// Convenience: pool-backed [`OffboardingInputs`] + current-law [`PesangonConfig::default`].
-    /// Use this when the caller just has a pool (the integration test; a future HTTP handler that
-    /// does not need to override rates or swap the input source).
+    /// Convenience: pool-backed [`OffboardingInputs`]. Use this when the caller just has a pool
+    /// (the integration test; a handler that does not need to swap the input source).
     pub fn with_pool(pool: PgPool) -> Self {
         let inputs = Arc::new(
             crate::application::service::offboarding_ports::PoolOffboardingInputs::new(
                 pool.clone(),
             ),
         );
-        Self::new(pool, inputs, PesangonConfig::default())
+        Self::new(pool, inputs)
     }
 
     /// The company id for the seams that still key on one (the outbox record, the event
@@ -379,7 +376,7 @@ impl OffboardingWriteService {
         Ok(true)
     }
 
-    /// Mark the offboarding closed, compute the 🇮🇩 pesangon, and stage an `offboarding.closed`
+    /// Mark the offboarding closed, compute the PP 35/2021 settlement, and stage an `offboarding.closed`
     /// outbox event carrying the breakdown — all atomically.
     ///
     /// # Returns
@@ -447,39 +444,21 @@ impl OffboardingWriteService {
             });
         }
 
-        // ── Gather the three cross-module pesangon inputs. These are read-only cross-schema
-        //    lookups, run before the state change so a missing prerequisite fails closed (the
-        //    offboarding is NOT closed and NO event is staged). The input tables (employee /
-        //    payroll / timeoff) are not stripped — they keep their own company fences, so the
-        //    reads carry the legacy company id explicitly. ─────────────────────────────────
-        let join_date = self
-            .inputs
-            .join_date(company_id, employee_id)
-            .await?
-            .ok_or(OffboardingCloseError::MissingJoinDate { employee_id })?;
-        let monthly_salary = self
-            .inputs
-            .current_monthly_salary(company_id, employee_id)
-            .await?
-            .ok_or(OffboardingCloseError::MissingSalary { employee_id })?;
-        let unused_leave_days = self
-            .inputs
-            .remaining_leave_days(company_id, employee_id)
-            .await?;
-
-        // Tenure in years (Decimal) from day-level math: days_between / 365.25.
-        let tenure_years = tenure_years(join_date, last_working_day);
-
-        // Parse the reason back into the typed enum and run the pure calc.
-        let reason_enum = OffboardingReason::from_str(&reason)
-            .map_err(|_| OffboardingCloseError::BadReason(reason.clone()))?;
-        let breakdown = pesangon(
-            reason_enum,
-            tenure_years,
-            monthly_salary,
-            unused_leave_days,
-            &self.cfg,
-        )?;
+        // ── Assemble and compute the settlement before the state change, so a missing
+        //    prerequisite (join date, salary, a reason naming no PP 35/2021 case, no statutory
+        //    set in force) fails closed: the offboarding is NOT closed and NO event is staged.
+        //    The input tables (employee / payroll / timeoff) are not stripped — they keep their
+        //    own company fences, so the reads carry the legacy company id explicitly. ─────────
+        let breakdown = compute_for_offboarding(
+            self.inputs.as_ref(),
+            &mut tx,
+            company_id,
+            employee_id,
+            &reason,
+            last_working_day,
+        )
+        .await
+        .map_err(OffboardingCloseError::from)?;
 
         // 1. Apply the state change. The row was just read under `FOR UPDATE` within this
         //    transaction; the fence (when the deployment decorates these tables) narrows it
@@ -495,20 +474,22 @@ impl OffboardingWriteService {
 
         // 2. Assemble the payload. Both consumers read off this same JSON: the employee consumer
         //    deactivates the employment; the payroll consumer appends a settlement row whose
-        //    new_amount = breakdown.total. `reference_id=offboarding_id` is the idempotency link on
-        //    both receiving tables. The full breakdown + the calc inputs are carried so the event is
-        //    self-auditing (payroll never needs to recompute or call back into lifecycle).
-        //    `company_id` stays: downstream consumers are still company-scoped and read it.
+        //    new_amount = breakdown.total (= net_payable). `reference_id=offboarding_id` is the
+        //    idempotency link on both receiving tables. The itemised breakdown and the inputs it
+        //    was computed from are carried so the event is self-auditing (payroll never needs to
+        //    recompute or call back into lifecycle). The top-level `tenure_years`,
+        //    `monthly_salary` and `unused_leave_days` keep their earlier names for existing
+        //    readers. `company_id` stays: downstream consumers are still company-scoped.
         let payload = serde_json::json!({
             "offboarding_id": offboarding_id,
             "company_id": company_id,
             "employee_id": employee_id,
             "reason": reason,
             "last_working_day": last_working_day.to_string(),
-            "pesangon_breakdown": breakdown,
-            "tenure_years": tenure_years,
-            "monthly_salary": monthly_salary,
-            "unused_leave_days": unused_leave_days,
+            "pesangon_breakdown": breakdown.to_event_payload(),
+            "tenure_years": breakdown.tenure_years,
+            "monthly_salary": breakdown.monthly_wage,
+            "unused_leave_days": breakdown.unused_leave_days,
         });
 
         // 3. Stage the outbox event IN THE SAME TX as the state change.
@@ -529,15 +510,18 @@ impl OffboardingWriteService {
     }
 }
 
-/// Tenure in fractional years between `join_date` and `as_of` (the offboarding's
-/// `last_working_day`), using a 365.25-day year. Clamped to `>= 0` (a future-dated join_date
-/// yields 0, not a negative tenure). Pure + total — mirrors the calc's own clamping convention.
-/// Shared with the final-settlement draft verb, which assembles from the same inputs.
-pub(crate) fn tenure_years(join_date: chrono::NaiveDate, as_of: chrono::NaiveDate) -> Decimal {
-    let days = (as_of - join_date).num_days();
-    if days <= 0 {
-        return Decimal::ZERO;
+impl From<SettlementComputeError> for OffboardingCloseError {
+    fn from(e: SettlementComputeError) -> Self {
+        match e {
+            SettlementComputeError::MissingJoinDate { employee_id } => {
+                OffboardingCloseError::MissingJoinDate { employee_id }
+            }
+            SettlementComputeError::MissingSalary { employee_id } => {
+                OffboardingCloseError::MissingSalary { employee_id }
+            }
+            SettlementComputeError::BadReason(r) => OffboardingCloseError::BadReason(r),
+            SettlementComputeError::Pesangon(p) => OffboardingCloseError::Pesangon(p),
+            SettlementComputeError::Db(d) => OffboardingCloseError::Db(d),
+        }
     }
-    let divisor = Decimal::try_from(DAYS_PER_YEAR).unwrap_or_else(|_| Decimal::new(36525, 2));
-    Decimal::from(days) / divisor
 }

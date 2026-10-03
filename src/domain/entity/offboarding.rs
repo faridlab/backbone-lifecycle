@@ -216,6 +216,8 @@ impl backbone_orm::EntityRepoMeta for Offboarding {
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("reason".to_string(), "offboarding_reason".to_string());
         m.insert("status".to_string(), "offboarding_status".to_string());
+        m.insert("notice_date".to_string(), "date".to_string());
+        m.insert("last_working_day".to_string(), "date".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

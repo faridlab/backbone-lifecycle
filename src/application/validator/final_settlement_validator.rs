@@ -6,7 +6,7 @@
 //! field rules. Extend in the `// <<< CUSTOM` zone.
 
 use backbone_core::{EntityValidator, ValidationErrors, ValidationError};
-use backbone_core::{NonNegative, RequiredString};
+use backbone_core::{NonNegative, OptionalNotBlank, RequiredString};
 use crate::domain::entity::FinalSettlement;
 
 /// Validator type alias for FinalSettlement entities.
@@ -16,6 +16,7 @@ pub type FinalSettlementValidator = EntityValidator<FinalSettlement>;
 pub fn final_settlement_validator() -> FinalSettlementValidator {
     EntityValidator::new()
         .rule(RequiredString::new("period", |e: &FinalSettlement| &e.period))
+        .rule(OptionalNotBlank::new("legal_basis", |e: &FinalSettlement| e.legal_basis.as_deref()))
     // <<< CUSTOM RULES
     // END CUSTOM RULES
 }

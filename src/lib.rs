@@ -203,13 +203,11 @@ impl LifecycleModule {
 pub struct LifecycleModuleBuilder {
     db_pool: Option<PgPool>,
     // <<< CUSTOM
-    // ADR-005 offboarding producer: optional overrides for the pesangon input port + config. When
-    // unset, build() falls back to a pool-backed OffboardingInputs and PesangonConfig::default()
-    // (current-law 🇮🇩 rates) — so the composer's `with_database(pool).build()` keeps working
-    // unchanged, while a deployment that loads rates from application.yml or injects a
-    // module-backed inputs impl can do so explicitly.
+    // ADR-005 offboarding producer: optional override for the settlement input port. When unset,
+    // build() falls back to a pool-backed OffboardingInputs — so the composer's
+    // `with_database(pool).build()` keeps working unchanged. The statutory severance numbers are
+    // not configurable here: they are effective-dated rows in the lifecycle.severance_* tables.
     offboarding_inputs: Option<Arc<dyn application::service::OffboardingInputs>>,
-    pesangon_config: Option<application::service::PesangonConfig>,
     // Outbound seams, unwired by default: the activity port (checkpoint notifies) and the GL
     // posting port (settlement confirmation). The host app supplies the real adapters at
     // composition time; the unwired defaults fail loudly (422) on any explicit side-effect
@@ -226,7 +224,6 @@ impl LifecycleModuleBuilder {
             db_pool: None,
             // <<< CUSTOM
             offboarding_inputs: None,
-            pesangon_config: None,
             activity_sink: None,
             gl_sink: None,
             // END CUSTOM
@@ -240,19 +237,12 @@ impl LifecycleModuleBuilder {
     }
 
     // <<< CUSTOM - custom builder methods
-    /// Override the cross-module read port the offboarding producer uses to gather the pesangon
-    /// inputs (join_date / current salary / remaining leave). Defaults to a pool-backed impl that
+    /// Override the cross-module read port the offboarding producer uses to gather the settlement
+    /// inputs (join_date / current salary / unused annual leave). Defaults to a pool-backed impl that
     /// reads `employee.employments` / `payroll.compensation_changes` / `timeoff.timeoff_balances`
     /// directly — only override if you need a different read source.
     pub fn with_offboarding_inputs(mut self, inputs: Arc<dyn application::service::OffboardingInputs>) -> Self {
         self.offboarding_inputs = Some(inputs);
-        self
-    }
-
-    /// Override the pesangon config (rates/scale/rules). Defaults to [`PesangonConfig::default`]
-    /// (current-law 🇮🇩 values); pass a YAML-loaded config to honor `config/application.yml`.
-    pub fn with_pesangon_config(mut self, cfg: application::service::PesangonConfig) -> Self {
-        self.pesangon_config = Some(cfg);
         self
     }
 
@@ -326,20 +316,17 @@ impl LifecycleModuleBuilder {
         // the state change + the outbox stage; no shared mutable state, so an Arc is purely for cheap reuse.
         let promotion_write_service = Arc::new(application::service::PromotionWriteService::new(db_pool.clone()));
         let onboarding_write_service = Arc::new(application::service::OnboardingWriteService::new(db_pool.clone()));
-        // The offboarding producer also computes the 🇮🇩 pesangon, so it needs the cross-module
-        // inputs port + the pesangon config. Fall back to pool-backed inputs + current-law config
-        // when the builder didn't override them.
+        // The offboarding producer also computes the settlement, so it needs the cross-module
+        // inputs port. Fall back to pool-backed inputs when the builder didn't override it.
         let offboarding_inputs = self.offboarding_inputs.unwrap_or_else(|| {
             Arc::new(application::service::PoolOffboardingInputs::new(db_pool.clone()))
         });
-        let pesangon_config = self.pesangon_config.unwrap_or_default();
         let offboarding_write_service = Arc::new(application::service::OffboardingWriteService::new(
             db_pool.clone(),
             offboarding_inputs.clone(),
-            pesangon_config.clone(),
         ));
-        // The settlement drafts from the SAME inputs + config the close verb used, so the row
-        // can never disagree with the offboarding.closed event payload. Seams default to the
+        // The settlement drafts through the SAME computation the close verb uses, so the row
+        // agrees with the offboarding.closed event payload. Seams default to the
         // unwired sinks (loud 422 on explicit side-effect requests) until the host wires them.
         let gl_sink = self.gl_sink.unwrap_or_else(|| {
             Arc::new(application::service::UnwiredGlSink)
@@ -348,7 +335,6 @@ impl LifecycleModuleBuilder {
             Arc::new(application::service::FinalSettlementWriteService::new(
                 db_pool.clone(),
                 offboarding_inputs,
-                pesangon_config,
                 gl_sink,
             ));
         // Checkpoint create verbs share the activity port (unwired by default).

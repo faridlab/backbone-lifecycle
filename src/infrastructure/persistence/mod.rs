@@ -22,6 +22,8 @@ mod discipline_record_repository;
 
 // Custom persistence modules
 // <<< CUSTOM
+// The statutory severance set (effective-dated) and the settlement settings.
+pub mod severance_params_repository;
 // END CUSTOM
 
 // Re-exports

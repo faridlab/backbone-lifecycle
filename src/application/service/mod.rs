@@ -27,6 +27,9 @@ pub use discipline_record_service::DisciplineRecordService;
 
 // <<< CUSTOM
 pub mod pesangon;
+// The one assembly of a leaver's settlement (inputs + statutory set + settings + calc), shared by
+// the close verb and the settlement draft so the event and the row agree.
+pub mod settlement_computation;
 // ADR-005 producers: the three career-lifecycle compound events. Each stages an outbox row in-tx
 // with its state change (approved→effective / in_progress→completed / cleared→closed). User-owned
 // custom files — never regenerated.
@@ -34,8 +37,8 @@ pub mod promotion_write_service;
 pub mod promotion_approvals_port;
 pub mod onboarding_write_service;
 pub mod offboarding_write_service;
-// The cross-module read ports the offboarding producer needs to compute the 🇮🇩 pesangon at close
-// time (join_date / current salary / remaining leave). Trait seam + pool-backed default impl.
+// The cross-module read ports the offboarding producer needs to compute the settlement at close
+// time (join_date / current salary / unused annual leave). Trait seam + pool-backed default impl.
 pub mod offboarding_ports;
 // Outbound activity-scheduling port: put a mail activity on a checkpoint owner's plate without a
 // Cargo edge into the mail domain. The host app wires the adapter; the unwired default fails
@@ -70,8 +73,11 @@ pub use onboarding_template_task_service::OnboardingTemplateTaskService;
 pub use promotion_service::PromotionService;
 // <<< CUSTOM
 pub use pesangon::{
-    pesangon, PesangonBreakdown, PesangonConfig, PesangonError, ReasonRule, UpmkScaleStep,
+    compute_settlement, last_pay, severance_basis, tenure_years, LastPay, PesangonError,
+    ReasonParams, SettlementBreakdown, SettlementInputs, SeveranceBasis, SeveranceParams,
+    SeveranceSettings, TenureBand, WorkWeek, SEVERANCE_COUNTRY,
 };
+pub use settlement_computation::{compute_for_offboarding, SettlementComputeError};
 pub use promotion_write_service::{
     PromotionValidationPort,
     NewPromotion, PromotionEffectError, PromotionWriteService, PROMOTION_EFFECTIVE_EVENT_TYPE,

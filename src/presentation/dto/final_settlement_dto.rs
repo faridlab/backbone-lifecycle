@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDate};
 use rust_decimal::Decimal;
 
 #[cfg(feature = "openapi")]
@@ -48,6 +48,29 @@ pub struct CreateFinalSettlementDto {
     pub unused_leave_payout: Option<Decimal>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "pesangon_amount")]
     pub pesangon_amount: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "uang_pesangon")]
+    pub uang_pesangon: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upmk: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "uang_pisah")]
+    pub uang_pisah: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "monthly_wage")]
+    pub monthly_wage: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "daily_wage")]
+    pub daily_wage: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "work_days_per_week")]
+    pub work_days_per_week: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "unused_leave_days")]
+    pub unused_leave_days: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "tenure_years")]
+    pub tenure_years: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "legal_basis")]
+    pub legal_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "statutory_effective_from")]
+    pub statutory_effective_from: Option<NaiveDate>,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(alias = "last_pay_via_payroll")]
+    pub last_pay_via_payroll: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "tax_deduction")]
     pub tax_deduction: Option<Decimal>,
     #[serde(alias = "net_payable")]
@@ -86,6 +109,29 @@ pub struct UpdateFinalSettlementDto {
     pub unused_leave_payout: Option<Decimal>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "pesangon_amount")]
     pub pesangon_amount: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "uang_pesangon")]
+    pub uang_pesangon: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upmk: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "uang_pisah")]
+    pub uang_pisah: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "monthly_wage")]
+    pub monthly_wage: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "daily_wage")]
+    pub daily_wage: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "work_days_per_week")]
+    pub work_days_per_week: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "unused_leave_days")]
+    pub unused_leave_days: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "tenure_years")]
+    pub tenure_years: Option<Decimal>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "legal_basis")]
+    pub legal_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "statutory_effective_from")]
+    pub statutory_effective_from: Option<NaiveDate>,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(alias = "last_pay_via_payroll")]
+    pub last_pay_via_payroll: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "tax_deduction")]
     pub tax_deduction: Option<Decimal>,
     #[serde(alias = "net_payable")]
@@ -125,6 +171,29 @@ pub struct PatchFinalSettlementDto {
     pub unused_leave_payout: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "pesangon_amount")]
     pub pesangon_amount: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "uang_pesangon")]
+    pub uang_pesangon: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upmk: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "uang_pisah")]
+    pub uang_pisah: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "monthly_wage")]
+    pub monthly_wage: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "daily_wage")]
+    pub daily_wage: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "work_days_per_week")]
+    pub work_days_per_week: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "unused_leave_days")]
+    pub unused_leave_days: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "tenure_years")]
+    pub tenure_years: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "legal_basis")]
+    pub legal_basis: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "statutory_effective_from")]
+    pub statutory_effective_from: Option<NaiveDate>,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "last_pay_via_payroll")]
+    pub last_pay_via_payroll: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "tax_deduction")]
     pub tax_deduction: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "net_payable")]
@@ -140,7 +209,7 @@ pub struct PatchFinalSettlementDto {
 impl PatchFinalSettlementDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.base_pay.is_some() || self.unused_leave_payout.is_some() || self.pesangon_amount.is_some() || self.uang_pesangon.is_some() || self.upmk.is_some() || self.uang_pisah.is_some() || self.monthly_wage.is_some() || self.daily_wage.is_some() || self.work_days_per_week.is_some() || self.unused_leave_days.is_some() || self.tenure_years.is_some() || self.legal_basis.is_some() || self.statutory_effective_from.is_some() || self.last_pay_via_payroll.is_some() || self.tax_deduction.is_some() || self.net_payable.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
     }
 }
 
@@ -167,6 +236,18 @@ pub struct FinalSettlementResponseDto {
     pub base_pay: Decimal,
     pub unused_leave_payout: Option<Decimal>,
     pub pesangon_amount: Option<Decimal>,
+    pub uang_pesangon: Option<Decimal>,
+    pub upmk: Option<Decimal>,
+    pub uang_pisah: Option<Decimal>,
+    pub monthly_wage: Option<Decimal>,
+    pub daily_wage: Option<Decimal>,
+    pub work_days_per_week: Option<i32>,
+    pub unused_leave_days: Option<Decimal>,
+    pub tenure_years: Option<Decimal>,
+    pub legal_basis: Option<String>,
+    pub statutory_effective_from: Option<NaiveDate>,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    pub last_pay_via_payroll: bool,
     pub tax_deduction: Option<Decimal>,
     pub net_payable: Decimal,
     pub status: SettlementStatus,
@@ -249,6 +330,17 @@ impl From<FinalSettlement> for FinalSettlementResponseDto {
             base_pay: entity.base_pay,
             unused_leave_payout: entity.unused_leave_payout,
             pesangon_amount: entity.pesangon_amount,
+            uang_pesangon: entity.uang_pesangon,
+            upmk: entity.upmk,
+            uang_pisah: entity.uang_pisah,
+            monthly_wage: entity.monthly_wage,
+            daily_wage: entity.daily_wage,
+            work_days_per_week: entity.work_days_per_week,
+            unused_leave_days: entity.unused_leave_days,
+            tenure_years: entity.tenure_years,
+            legal_basis: entity.legal_basis,
+            statutory_effective_from: entity.statutory_effective_from,
+            last_pay_via_payroll: entity.last_pay_via_payroll,
             tax_deduction: entity.tax_deduction,
             net_payable: entity.net_payable,
             status: entity.status,
@@ -282,6 +374,17 @@ impl From<CreateFinalSettlementDto> for FinalSettlement {
             base_pay: dto.base_pay,
             unused_leave_payout: dto.unused_leave_payout,
             pesangon_amount: dto.pesangon_amount,
+            uang_pesangon: dto.uang_pesangon,
+            upmk: dto.upmk,
+            uang_pisah: dto.uang_pisah,
+            monthly_wage: dto.monthly_wage,
+            daily_wage: dto.daily_wage,
+            work_days_per_week: dto.work_days_per_week,
+            unused_leave_days: dto.unused_leave_days,
+            tenure_years: dto.tenure_years,
+            legal_basis: dto.legal_basis,
+            statutory_effective_from: dto.statutory_effective_from,
+            last_pay_via_payroll: dto.last_pay_via_payroll,
             tax_deduction: dto.tax_deduction,
             net_payable: dto.net_payable,
             status: dto.status,
@@ -302,6 +405,17 @@ impl From<&FinalSettlement> for FinalSettlementResponseDto {
             base_pay: entity.base_pay.clone(),
             unused_leave_payout: entity.unused_leave_payout.clone(),
             pesangon_amount: entity.pesangon_amount.clone(),
+            uang_pesangon: entity.uang_pesangon.clone(),
+            upmk: entity.upmk.clone(),
+            uang_pisah: entity.uang_pisah.clone(),
+            monthly_wage: entity.monthly_wage.clone(),
+            daily_wage: entity.daily_wage.clone(),
+            work_days_per_week: entity.work_days_per_week.clone(),
+            unused_leave_days: entity.unused_leave_days.clone(),
+            tenure_years: entity.tenure_years.clone(),
+            legal_basis: entity.legal_basis.clone(),
+            statutory_effective_from: entity.statutory_effective_from.clone(),
+            last_pay_via_payroll: entity.last_pay_via_payroll.clone(),
             tax_deduction: entity.tax_deduction.clone(),
             net_payable: entity.net_payable.clone(),
             status: entity.status.clone(),
@@ -326,6 +440,17 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
         self.base_pay = dto.base_pay;
         self.unused_leave_payout = dto.unused_leave_payout;
         self.pesangon_amount = dto.pesangon_amount;
+        self.uang_pesangon = dto.uang_pesangon;
+        self.upmk = dto.upmk;
+        self.uang_pisah = dto.uang_pisah;
+        self.monthly_wage = dto.monthly_wage;
+        self.daily_wage = dto.daily_wage;
+        self.work_days_per_week = dto.work_days_per_week;
+        self.unused_leave_days = dto.unused_leave_days;
+        self.tenure_years = dto.tenure_years;
+        self.legal_basis = dto.legal_basis;
+        self.statutory_effective_from = dto.statutory_effective_from;
+        self.last_pay_via_payroll = dto.last_pay_via_payroll;
         self.tax_deduction = dto.tax_deduction;
         self.net_payable = dto.net_payable;
         self.status = dto.status;
@@ -343,3 +468,4 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
 // Add custom DTOs specific to FinalSettlement here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

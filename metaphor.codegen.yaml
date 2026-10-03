@@ -16,6 +16,10 @@ user_owned:
   # - "src/application/service/onboarding_service.rs"
   # - "src/presentation/http/guarded_routes.rs"
   - "src/application/service/pesangon.rs"
+  # The shared settlement assembly (close verb + draft verb) and its persistence reads
+  # (the effective-dated statutory severance set, the settlement settings).
+  - "src/application/service/settlement_computation.rs"
+  - "src/infrastructure/persistence/severance_params_repository.rs"
   # ADR-005 producers: lifecycle write services (emit outbox events in-tx with state changes).
   - "src/application/service/promotion_write_service.rs"
   - "src/application/service/onboarding_write_service.rs"
@@ -42,6 +46,15 @@ user_owned:
   # overwritten back to a company-fenced shape).
   - "migrations/20260909000000_strip_tenancy.up.sql"
   - "migrations/20260909000000_strip_tenancy.down.sql"
+  # Hand-written PP 35/2021 severance migrations: the widened offboarding reason, the
+  # effective-dated statutory tables with their seeded law data, and the itemised settlement
+  # columns. Law data and enum widening are not schema-derived emission.
+  - "migrations/20261003100000_widen_offboarding_reason.up.sql"
+  - "migrations/20261003100000_widen_offboarding_reason.down.sql"
+  - "migrations/20261003100001_create_severance_statutory_tables.up.sql"
+  - "migrations/20261003100001_create_severance_statutory_tables.down.sql"
+  - "migrations/20261003100002_add_final_settlement_breakdown.up.sql"
+  - "migrations/20261003100002_add_final_settlement_breakdown.down.sql"
 
   # Behavior tests (the golden cases / oracle) + BDD features.
   - "tests/features/**"

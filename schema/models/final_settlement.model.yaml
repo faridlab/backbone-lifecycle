@@ -1,18 +1,26 @@
 # =============================================================================
 # Domain: lifecycle
 # Entity: FinalSettlement
-# Description: The final pay packet on exit — base pay for the final period,
-#              unused-leave payout, 🇮🇩 pesangon (severance), tax deduction, and
-#              the net payable. The pesangon_amount is computed by the
-#              pesangon() calc in src/application/service/pesangon.rs (pure fn
-#              over reads of tenure/reason/salary — computation, not master
-#              data). Status: draft → confirmed → paid (or disputed).
+# Description: The final pay packet on exit, itemised per PP 35/2021: uang
+#              pesangon (Pasal 40(2)), UPMK (Pasal 40(3)), uang pisah (company
+#              policy, for the cases that earn it), the unused-annual-leave
+#              payout (uang penggantian hak, Pasal 40(4)(a)) and the last pay
+#              for the final month. The statutory multipliers come from the
+#              effective-dated lifecycle.severance_* tables, resolved as of
+#              the last working day; the computation is the pure calc in
+#              src/application/service/pesangon.rs. The inputs it used (wage
+#              base, daily wage, work week, tenure, leave days, legal basis)
+#              are stamped on the row so it audits on its own.
+#              net_payable is what this settlement books and pays: severance
+#              total + leave payout. base_pay (the last pay) is NOT in it —
+#              last_pay_via_payroll says payroll pays the final month.
+#              Status: draft → confirmed → paid (or disputed).
 # =============================================================================
 
 models:
   - name: FinalSettlement
     collection: final_settlements
-    description: "Final pay packet — base pay, unused-leave payout, pesangon, tax, net payable."
+    description: "Final pay packet — PP 35/2021 severance itemised (uang pesangon, UPMK, uang pisah), unused-leave payout, last pay, tax, net payable."
 
     fields:
       id:
@@ -38,17 +46,70 @@ models:
       base_pay:
         type: decimal
         attributes: ["@required", "@precision(18,2)", "@non_negative"]
-        description: "Base pay for the final (prorated) period"
+        description: "Last pay — the final month's wage prorated over the working days from the later of join date and the month start to the last working day, at the daily wage; zero when the employee never started. Paid through payroll when last_pay_via_payroll is true, so it is NOT part of net_payable"
 
       unused_leave_payout:
         type: decimal?
         attributes: ["@precision(18,2)", "@non_negative"]
-        description: "Payout for unused leave days"
+        description: "Uang penggantian hak for unused annual leave (PP 35/2021 Pasal 40(4)(a)) — unused_leave_days × daily_wage"
 
       pesangon_amount:
         type: decimal?
         attributes: ["@precision(18,2)", "@non_negative"]
-        description: "🇮🇩 Severance total (pesangon + UPMK + UPM) from the pesangon() calc"
+        description: "Severance total = uang_pesangon + upmk + uang_pisah (what the confirmation posts to severance expense). Rows drafted before the itemised columns existed carry the earlier lump here with the items NULL"
+
+      uang_pesangon:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "Uang pesangon — PP 35/2021 Pasal 40(2) months for the tenure × the reason's pesangon multiplier × monthly_wage"
+
+      upmk:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "Uang penghargaan masa kerja — PP 35/2021 Pasal 40(3) months for the tenure × the reason's UPMK multiplier × monthly_wage"
+
+      uang_pisah:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "Uang pisah — the company's separation pay (setting lifecycle.offboarding / uang_pisah.months × monthly_wage) for the reasons that earn it; zero elsewhere"
+
+      monthly_wage:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "The wage base every item is computed from (the current monthly salary on record)"
+
+      daily_wage:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "monthly_wage / 21 for a five-day week or / 25 for a six-day week (PP 36/2021 Pasal 17) — the basis of both the last pay and the leave payout"
+
+      work_days_per_week:
+        type: int?
+        description: "The work pattern the daily wage was derived from (5 or 6)"
+
+      unused_leave_days:
+        type: decimal?
+        attributes: ["@precision(8,2)"]
+        description: "Unused, unexpired annual leave days paid out"
+
+      tenure_years:
+        type: decimal?
+        attributes: ["@precision(8,4)"]
+        description: "Years of service from the join date through the last working day (the whole part is completed years)"
+
+      legal_basis:
+        type: string?
+        attributes: ["@length(max=120)"]
+        description: "The PP 35/2021 provision the severance was computed under, e.g. 'PP 35/2021 Pasal 50'"
+
+      statutory_effective_from:
+        type: date?
+        description: "effective_from of the statutory severance set that applied on the last working day"
+
+      last_pay_via_payroll:
+        type: bool
+        attributes: ["@required", "@default(true)"]
+        description: "True: the last pay (base_pay) is paid by the final payroll run and is excluded from net_payable"
 
       tax_deduction:
         type: decimal?
@@ -58,7 +119,7 @@ models:
       net_payable:
         type: decimal
         attributes: ["@required", "@precision(18,2)"]
-        description: "Net amount payable to the leaver"
+        description: "What this settlement books and pays the leaver: pesangon_amount + unused_leave_payout. Excludes base_pay when last_pay_via_payroll is true"
 
       status:
         type: SettlementStatus

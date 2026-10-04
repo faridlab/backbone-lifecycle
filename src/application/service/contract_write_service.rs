@@ -469,6 +469,22 @@ impl ContractWriteService {
     /// The reminder tick: active PKWT contracts inside the window, reminded
     /// once (the watermark). Emits `lifecycle.contract.expiring` per row.
     pub async fn remind_due(&self, now: DateTime<Utc>, days: i32) -> Result<Vec<Uuid>, ContractError> {
+        self.remind_due_from(now, days, None).await
+    }
+
+    /// The reminder tick with a start point. A contract that had already
+    /// ended before the day of `start` is left unreminded, so a scheduler
+    /// that begins running on a database it never served does not send stale
+    /// notices about expiries that have passed. Every contract still running
+    /// is reminded once, including one whose window opened before that day,
+    /// since its renew, convert or end decision is still ahead. `None`
+    /// reminds everything inside the window, as `remind_due` does.
+    pub async fn remind_due_from(
+        &self,
+        now: DateTime<Utc>,
+        days: i32,
+        start: Option<DateTime<Utc>>,
+    ) -> Result<Vec<Uuid>, ContractError> {
         let mut tx = self.rpool().begin().await?;
         Self::bind_ambient(&mut tx).await?;
         let rows: Vec<(Uuid, Uuid, NaiveDate)> = sqlx::query_as(
@@ -477,6 +493,7 @@ impl ContractWriteService {
                   AND end_date IS NOT NULL
                   AND end_date <= ($1::date + make_interval(days => $2))
                   AND reminder_sent_at IS NULL
+                  AND ($3::date IS NULL OR end_date >= $3::date)
                   AND (metadata->>'deleted_at') IS NULL
                 ORDER BY end_date
                 LIMIT 100
@@ -484,6 +501,7 @@ impl ContractWriteService {
         )
         .bind(now.date_naive())
         .bind(days)
+        .bind(start.map(|s| s.date_naive()))
         .fetch_all(&mut *tx)
         .await?;
         for (id, employee_id, end_date) in &rows {

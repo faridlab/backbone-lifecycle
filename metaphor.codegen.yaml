@@ -61,6 +61,8 @@ user_owned:
   # The career-lifecycle compound-event flow suite (hand-written producer→relay→consumer
   # integration tests, not schema-derived).
   - "tests/career_lifecycle_flows.rs"
+  # The contract expiry reminder pass and its start point.
+  - "tests/contract_reminder_start.rs"
   # - "tests/*_golden_cases.rs"
   # - "tests/integrity_probes.rs"
 

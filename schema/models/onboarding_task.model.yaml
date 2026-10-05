@@ -73,6 +73,10 @@ enums:
         description: "Induction / orientation session"
 
   - name: TaskStatus
+    # Lives in the module's own schema: lifecycle and project each declare a
+    # task_status, so a bare name matches neither column (the generator
+    # schema-qualifies the type everywhere it is named).
+    schema: lifecycle
     description: "Status of an onboarding/offboarding task"
     variants:
       - name: pending

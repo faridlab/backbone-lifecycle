@@ -10,6 +10,9 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 mod clearance_item_seeder;
+mod contract_seeder;
+mod contract_template_seeder;
+mod discipline_record_seeder;
 mod exit_interview_seeder;
 mod final_settlement_seeder;
 mod offboarding_seeder;
@@ -20,6 +23,9 @@ mod onboarding_template_task_seeder;
 mod promotion_seeder;
 
 pub use clearance_item_seeder::SeedClearanceItemSeeder;
+pub use contract_seeder::SeedContractSeeder;
+pub use contract_template_seeder::SeedContractTemplateSeeder;
+pub use discipline_record_seeder::SeedDisciplineRecordSeeder;
 pub use exit_interview_seeder::SeedExitInterviewSeeder;
 pub use final_settlement_seeder::SeedFinalSettlementSeeder;
 pub use offboarding_seeder::SeedOffboardingSeeder;

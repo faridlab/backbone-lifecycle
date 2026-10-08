@@ -244,6 +244,7 @@ impl backbone_orm::EntityRepoMeta for OnboardingTask {
         m.insert("owner_employee_id".to_string(), "uuid".to_string());
         m.insert("category".to_string(), "task_category".to_string());
         m.insert("status".to_string(), "task_status".to_string());
+        m.insert("due_date".to_string(), "date".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

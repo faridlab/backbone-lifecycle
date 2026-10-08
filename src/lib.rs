@@ -36,6 +36,9 @@ pub use infrastructure::persistence::*;
 
 // Re-exports - Application services
 pub use application::service::ClearanceItemService;
+pub use application::service::ContractService;
+pub use application::service::ContractTemplateService;
+pub use application::service::DisciplineRecordService;
 pub use application::service::ExitInterviewService;
 pub use application::service::FinalSettlementService;
 pub use application::service::OffboardingService;
@@ -44,9 +47,6 @@ pub use application::service::OnboardingTaskService;
 pub use application::service::OnboardingTemplateService;
 pub use application::service::OnboardingTemplateTaskService;
 pub use application::service::PromotionService;
-pub use application::service::ContractService;
-pub use application::service::ContractTemplateService;
-pub use application::service::DisciplineRecordService;
 
 // Re-exports - Workflows
 pub use application::workflows::*;
@@ -69,6 +69,9 @@ use sqlx::PgPool;
 /// ```
 pub struct LifecycleModule {
     pub(crate) clearance_item_service: Arc<ClearanceItemService>,
+    pub(crate) contract_service: Arc<ContractService>,
+    pub(crate) contract_template_service: Arc<ContractTemplateService>,
+    pub(crate) discipline_record_service: Arc<DisciplineRecordService>,
     pub(crate) exit_interview_service: Arc<ExitInterviewService>,
     pub(crate) final_settlement_service: Arc<FinalSettlementService>,
     pub(crate) offboarding_service: Arc<OffboardingService>,
@@ -77,11 +80,6 @@ pub struct LifecycleModule {
     pub(crate) onboarding_template_service: Arc<OnboardingTemplateService>,
     pub(crate) onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
     pub(crate) promotion_service: Arc<PromotionService>,
-    // The three employment-record entities: plain CRUD services backing the
-    // generic read surface (writes go through their dedicated write services).
-    pub(crate) contract_service: Arc<ContractService>,
-    pub(crate) contract_template_service: Arc<ContractTemplateService>,
-    pub(crate) discipline_record_service: Arc<DisciplineRecordService>,
     // <<< CUSTOM FIELDS
     /// The three career-lifecycle write-services (ADR-005 producers): each flips a workflow status
     /// and stages the matching compound event in one tx. Public so the composer / tests can drive
@@ -121,6 +119,9 @@ impl LifecycleModule {
     pub fn all_crud_routes(&self) -> Router {
         use presentation::http::{
             create_clearance_item_routes,
+            create_contract_routes,
+            create_contract_template_routes,
+            create_discipline_record_routes,
             create_exit_interview_routes,
             create_final_settlement_routes,
             create_offboarding_routes,
@@ -133,6 +134,9 @@ impl LifecycleModule {
 
         Router::new()
             .merge(create_clearance_item_routes(self.clearance_item_service.clone()))
+            .merge(create_contract_routes(self.contract_service.clone()))
+            .merge(create_contract_template_routes(self.contract_template_service.clone()))
+            .merge(create_discipline_record_routes(self.discipline_record_service.clone()))
             .merge(create_exit_interview_routes(self.exit_interview_service.clone()))
             .merge(create_final_settlement_routes(self.final_settlement_service.clone()))
             .merge(create_offboarding_routes(self.offboarding_service.clone()))
@@ -161,6 +165,9 @@ impl LifecycleModule {
     pub fn readonly_routes(&self) -> Router {
         use presentation::http::{
             create_clearance_item_read_routes,
+            create_contract_read_routes,
+            create_contract_template_read_routes,
+            create_discipline_record_read_routes,
             create_exit_interview_read_routes,
             create_final_settlement_read_routes,
             create_offboarding_read_routes,
@@ -169,13 +176,13 @@ impl LifecycleModule {
             create_onboarding_template_read_routes,
             create_onboarding_template_task_read_routes,
             create_promotion_read_routes,
-            create_contract_read_routes,
-            create_contract_template_read_routes,
-            create_discipline_record_read_routes,
         };
 
         Router::new()
             .merge(create_clearance_item_read_routes(self.clearance_item_service.clone()))
+            .merge(create_contract_read_routes(self.contract_service.clone()))
+            .merge(create_contract_template_read_routes(self.contract_template_service.clone()))
+            .merge(create_discipline_record_read_routes(self.discipline_record_service.clone()))
             .merge(create_exit_interview_read_routes(self.exit_interview_service.clone()))
             .merge(create_final_settlement_read_routes(self.final_settlement_service.clone()))
             .merge(create_offboarding_read_routes(self.offboarding_service.clone()))
@@ -184,9 +191,6 @@ impl LifecycleModule {
             .merge(create_onboarding_template_read_routes(self.onboarding_template_service.clone()))
             .merge(create_onboarding_template_task_read_routes(self.onboarding_template_task_service.clone()))
             .merge(create_promotion_read_routes(self.promotion_service.clone()))
-            .merge(create_contract_read_routes(self.contract_service.clone()))
-            .merge(create_contract_template_read_routes(self.contract_template_service.clone()))
-            .merge(create_discipline_record_read_routes(self.discipline_record_service.clone()))
     }
 
     // <<< CUSTOM METHODS
@@ -273,6 +277,18 @@ impl LifecycleModuleBuilder {
         let clearance_item_repository = Arc::new(ClearanceItemRepository::new(db_pool.clone()));
         let clearance_item_service = Arc::new(ClearanceItemService::with_repository(clearance_item_repository.clone()));
 
+        // Contract service
+        let contract_repository = Arc::new(ContractRepository::new(db_pool.clone()));
+        let contract_service = Arc::new(ContractService::with_repository(contract_repository.clone()));
+
+        // ContractTemplate service
+        let contract_template_repository = Arc::new(ContractTemplateRepository::new(db_pool.clone()));
+        let contract_template_service = Arc::new(ContractTemplateService::with_repository(contract_template_repository.clone()));
+
+        // DisciplineRecord service
+        let discipline_record_repository = Arc::new(DisciplineRecordRepository::new(db_pool.clone()));
+        let discipline_record_service = Arc::new(DisciplineRecordService::with_repository(discipline_record_repository.clone()));
+
         // ExitInterview service
         let exit_interview_repository = Arc::new(ExitInterviewRepository::new(db_pool.clone()));
         let exit_interview_service = Arc::new(ExitInterviewService::with_repository(exit_interview_repository.clone()));
@@ -304,14 +320,6 @@ impl LifecycleModuleBuilder {
         // Promotion service
         let promotion_repository = Arc::new(PromotionRepository::new(db_pool.clone()));
         let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
-
-        // Employment-record CRUD services (read surface only).
-        let contract_repository = Arc::new(ContractRepository::new(db_pool.clone()));
-        let contract_service = Arc::new(ContractService::with_repository(contract_repository.clone()));
-        let contract_template_repository = Arc::new(ContractTemplateRepository::new(db_pool.clone()));
-        let contract_template_service = Arc::new(ContractTemplateService::with_repository(contract_template_repository.clone()));
-        let discipline_record_repository = Arc::new(DisciplineRecordRepository::new(db_pool.clone()));
-        let discipline_record_service = Arc::new(DisciplineRecordService::with_repository(discipline_record_repository.clone()));
 
         // <<< CUSTOM
         // ADR-005 producers: bound to the same pool as the repos. Each verb opens its own tx around
@@ -361,6 +369,9 @@ impl LifecycleModuleBuilder {
 
         Ok(LifecycleModule {
             clearance_item_service,
+            contract_service,
+            contract_template_service,
+            discipline_record_service,
             exit_interview_service,
             final_settlement_service,
             offboarding_service,
@@ -369,9 +380,6 @@ impl LifecycleModuleBuilder {
             onboarding_template_service,
             onboarding_template_task_service,
             promotion_service,
-            contract_service,
-            contract_template_service,
-            discipline_record_service,
             // <<< CUSTOM
             promotion_write_service,
             onboarding_write_service,

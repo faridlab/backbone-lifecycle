@@ -6,6 +6,9 @@
 //! with validation and OpenAPI schema support.
 
 pub mod clearance_item_dto;
+pub mod contract_dto;
+pub mod contract_template_dto;
+pub mod discipline_record_dto;
 pub mod exit_interview_dto;
 pub mod final_settlement_dto;
 pub mod offboarding_dto;
@@ -14,24 +17,8 @@ pub mod onboarding_task_dto;
 pub mod onboarding_template_dto;
 pub mod onboarding_template_task_dto;
 pub mod promotion_dto;
-// The three employment-record entities.
-pub mod contract_dto;
-pub mod contract_template_dto;
-pub mod discipline_record_dto;
 
 // Re-exports
-pub use contract_dto::{
-    CreateContractDto, UpdateContractDto, PatchContractDto, ContractResponseDto,
-    ContractListResponseDto, ContractSummaryDto,
-};
-pub use contract_template_dto::{
-    CreateContractTemplateDto, UpdateContractTemplateDto, PatchContractTemplateDto,
-    ContractTemplateResponseDto, ContractTemplateListResponseDto, ContractTemplateSummaryDto,
-};
-pub use discipline_record_dto::{
-    CreateDisciplineRecordDto, UpdateDisciplineRecordDto, PatchDisciplineRecordDto,
-    DisciplineRecordResponseDto, DisciplineRecordListResponseDto, DisciplineRecordSummaryDto,
-};
 pub use clearance_item_dto::{
     CreateClearanceItemDto,
     UpdateClearanceItemDto,
@@ -39,6 +26,30 @@ pub use clearance_item_dto::{
     ClearanceItemResponseDto,
     ClearanceItemListResponseDto,
     ClearanceItemSummaryDto,
+};
+pub use contract_dto::{
+    CreateContractDto,
+    UpdateContractDto,
+    PatchContractDto,
+    ContractResponseDto,
+    ContractListResponseDto,
+    ContractSummaryDto,
+};
+pub use contract_template_dto::{
+    CreateContractTemplateDto,
+    UpdateContractTemplateDto,
+    PatchContractTemplateDto,
+    ContractTemplateResponseDto,
+    ContractTemplateListResponseDto,
+    ContractTemplateSummaryDto,
+};
+pub use discipline_record_dto::{
+    CreateDisciplineRecordDto,
+    UpdateDisciplineRecordDto,
+    PatchDisciplineRecordDto,
+    DisciplineRecordResponseDto,
+    DisciplineRecordListResponseDto,
+    DisciplineRecordSummaryDto,
 };
 pub use exit_interview_dto::{
     CreateExitInterviewDto,

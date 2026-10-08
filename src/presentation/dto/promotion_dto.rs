@@ -58,12 +58,16 @@ pub struct CreatePromotionDto {
     #[serde(alias = "effective_date")]
     pub effective_date: NaiveDate,
     pub status: PromotionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "approval_request_id")]
+    pub approval_request_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "requested_by")]
     pub requested_by: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "approved_by")]
     pub approved_by: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "appraisal_id")]
     pub appraisal_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "appraisal_rating")]
+    pub appraisal_rating: Option<Decimal>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -104,12 +108,16 @@ pub struct UpdatePromotionDto {
     #[serde(alias = "effective_date")]
     pub effective_date: NaiveDate,
     pub status: PromotionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "approval_request_id")]
+    pub approval_request_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "requested_by")]
     pub requested_by: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "approved_by")]
     pub approved_by: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "appraisal_id")]
     pub appraisal_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "appraisal_rating")]
+    pub appraisal_rating: Option<Decimal>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -151,12 +159,16 @@ pub struct PatchPromotionDto {
     pub effective_date: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<PromotionStatus>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "approval_request_id")]
+    pub approval_request_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "requested_by")]
     pub requested_by: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "approved_by")]
     pub approved_by: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "appraisal_id")]
     pub appraisal_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "appraisal_rating")]
+    pub appraisal_rating: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -164,7 +176,7 @@ pub struct PatchPromotionDto {
 impl PatchPromotionDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.proposed_salary.is_some() || self.effective_date.is_some() || self.status.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.reason.is_some()
+        self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.proposed_salary.is_some() || self.effective_date.is_some() || self.status.is_some() || self.approval_request_id.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.appraisal_rating.is_some() || self.reason.is_some()
     }
 }
 
@@ -195,9 +207,11 @@ pub struct PromotionResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     pub effective_date: NaiveDate,
     pub status: PromotionStatus,
+    pub approval_request_id: Option<Uuid>,
     pub requested_by: Option<Uuid>,
     pub approved_by: Option<Uuid>,
     pub appraisal_id: Option<Uuid>,
+    pub appraisal_rating: Option<Decimal>,
     pub reason: Option<String>,
     pub metadata: AuditMetadata,
 }
@@ -281,9 +295,11 @@ impl From<Promotion> for PromotionResponseDto {
             proposed_salary: entity.proposed_salary,
             effective_date: entity.effective_date,
             status: entity.status,
+            approval_request_id: entity.approval_request_id,
             requested_by: entity.requested_by,
             approved_by: entity.approved_by,
             appraisal_id: entity.appraisal_id,
+            appraisal_rating: entity.appraisal_rating,
             reason: entity.reason,
             metadata: entity.metadata,
         }
@@ -318,9 +334,11 @@ impl From<CreatePromotionDto> for Promotion {
             proposed_salary: dto.proposed_salary,
             effective_date: dto.effective_date,
             status: dto.status,
+            approval_request_id: dto.approval_request_id,
             requested_by: dto.requested_by,
             approved_by: dto.approved_by,
             appraisal_id: dto.appraisal_id,
+            appraisal_rating: dto.appraisal_rating,
             reason: dto.reason,
             metadata: AuditMetadata::default(),
         }
@@ -342,9 +360,11 @@ impl From<&Promotion> for PromotionResponseDto {
             proposed_salary: entity.proposed_salary.clone(),
             effective_date: entity.effective_date.clone(),
             status: entity.status.clone(),
+            approval_request_id: entity.approval_request_id.clone(),
             requested_by: entity.requested_by.clone(),
             approved_by: entity.approved_by.clone(),
             appraisal_id: entity.appraisal_id.clone(),
+            appraisal_rating: entity.appraisal_rating.clone(),
             reason: entity.reason.clone(),
             metadata: entity.metadata.clone(),
         }
@@ -370,9 +390,11 @@ impl backbone_core::ApplyUpdateDto<UpdatePromotionDto> for Promotion {
         self.proposed_salary = dto.proposed_salary;
         self.effective_date = dto.effective_date;
         self.status = dto.status;
+        self.approval_request_id = dto.approval_request_id;
         self.requested_by = dto.requested_by;
         self.approved_by = dto.approved_by;
         self.appraisal_id = dto.appraisal_id;
+        self.appraisal_rating = dto.appraisal_rating;
         self.reason = dto.reason;
         Ok(self)
     }

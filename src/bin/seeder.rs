@@ -13,6 +13,9 @@ use std::env;
 
 // Import seeders
 use backbone_lifecycle::seeders::SeedClearanceItemSeeder;
+use backbone_lifecycle::seeders::SeedContractSeeder;
+use backbone_lifecycle::seeders::SeedContractTemplateSeeder;
+use backbone_lifecycle::seeders::SeedDisciplineRecordSeeder;
 use backbone_lifecycle::seeders::SeedExitInterviewSeeder;
 use backbone_lifecycle::seeders::SeedFinalSettlementSeeder;
 use backbone_lifecycle::seeders::SeedOffboardingSeeder;
@@ -50,6 +53,9 @@ async fn main() -> Result<()> {
     // Register seeders in order
     let mut seeders: Vec<Box<dyn Seeder + Send + Sync>> = Vec::new();
     seeders.push(Box::new(SeedClearanceItemSeeder::new()));
+    seeders.push(Box::new(SeedContractSeeder::new()));
+    seeders.push(Box::new(SeedContractTemplateSeeder::new()));
+    seeders.push(Box::new(SeedDisciplineRecordSeeder::new()));
     seeders.push(Box::new(SeedExitInterviewSeeder::new()));
     seeders.push(Box::new(SeedFinalSettlementSeeder::new()));
     seeders.push(Box::new(SeedOffboardingSeeder::new()));

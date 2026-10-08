@@ -253,6 +253,10 @@ impl backbone_orm::EntityRepoMeta for Onboarding {
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("template_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "onboarding_status".to_string());
+        m.insert("start_date".to_string(), "date".to_string());
+        m.insert("completed_at".to_string(), "timestamptz".to_string());
+        m.insert("probation_end_date".to_string(), "date".to_string());
+        m.insert("confirmed_at".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

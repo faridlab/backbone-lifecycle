@@ -4,6 +4,12 @@
 
 pub mod clearance_item_events;
 pub mod clearance_item_event_handlers;
+pub mod contract_events;
+pub mod contract_event_handlers;
+pub mod contract_template_events;
+pub mod contract_template_event_handlers;
+pub mod discipline_record_events;
+pub mod discipline_record_event_handlers;
 pub mod exit_interview_events;
 pub mod exit_interview_event_handlers;
 pub mod final_settlement_events;
@@ -23,6 +29,12 @@ pub mod promotion_event_handlers;
 
 pub use clearance_item_events::{ClearanceItemEvent, ClearanceItemEventPublisher, NoopClearanceItemEventPublisher};
 pub use clearance_item_event_handlers::ClearanceItemEventHandler;
+pub use contract_events::{ContractEvent, ContractEventPublisher, NoopContractEventPublisher};
+pub use contract_event_handlers::ContractEventHandler;
+pub use contract_template_events::{ContractTemplateEvent, ContractTemplateEventPublisher, NoopContractTemplateEventPublisher};
+pub use contract_template_event_handlers::ContractTemplateEventHandler;
+pub use discipline_record_events::{DisciplineRecordEvent, DisciplineRecordEventPublisher, NoopDisciplineRecordEventPublisher};
+pub use discipline_record_event_handlers::DisciplineRecordEventHandler;
 pub use exit_interview_events::{ExitInterviewEvent, ExitInterviewEventPublisher, NoopExitInterviewEventPublisher};
 pub use exit_interview_event_handlers::ExitInterviewEventHandler;
 pub use final_settlement_events::{FinalSettlementEvent, FinalSettlementEventPublisher, NoopFinalSettlementEventPublisher};

@@ -400,4 +400,3 @@ impl backbone_core::ApplyUpdateDto<UpdateDisciplineRecordDto> for DisciplineReco
 // Add custom DTOs specific to DisciplineRecord here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

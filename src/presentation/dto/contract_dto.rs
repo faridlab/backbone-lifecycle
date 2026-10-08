@@ -371,4 +371,3 @@ impl backbone_core::ApplyUpdateDto<UpdateContractDto> for Contract {
 // Add custom DTOs specific to Contract here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

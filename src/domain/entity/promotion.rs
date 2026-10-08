@@ -63,9 +63,11 @@ pub struct Promotion {
     pub proposed_salary: Option<Decimal>,
     pub effective_date: NaiveDate,
     pub status: PromotionStatus,
+    pub approval_request_id: Option<Uuid>,
     pub requested_by: Option<Uuid>,
     pub approved_by: Option<Uuid>,
     pub appraisal_id: Option<Uuid>,
+    pub appraisal_rating: Option<Decimal>,
     pub reason: Option<String>,
     #[serde(default)]
     #[sqlx(json)]
@@ -93,9 +95,11 @@ impl Promotion {
             proposed_salary: None,
             effective_date,
             status,
+            approval_request_id: None,
             requested_by: None,
             approved_by: None,
             appraisal_id: None,
+            appraisal_rating: None,
             reason: None,
             metadata: AuditMetadata::default(),
         }
@@ -203,6 +207,12 @@ impl Promotion {
         self
     }
 
+    /// Set the approval_request_id field (chainable)
+    pub fn with_approval_request_id(mut self, value: Uuid) -> Self {
+        self.approval_request_id = Some(value);
+        self
+    }
+
     /// Set the requested_by field (chainable)
     pub fn with_requested_by(mut self, value: Uuid) -> Self {
         self.requested_by = Some(value);
@@ -218,6 +228,12 @@ impl Promotion {
     /// Set the appraisal_id field (chainable)
     pub fn with_appraisal_id(mut self, value: Uuid) -> Self {
         self.appraisal_id = Some(value);
+        self
+    }
+
+    /// Set the appraisal_rating field (chainable)
+    pub fn with_appraisal_rating(mut self, value: Decimal) -> Self {
+        self.appraisal_rating = Some(value);
         self
     }
 
@@ -268,6 +284,9 @@ impl Promotion {
                 "status" => {
                     if let Ok(v) = serde_json::from_value(value) { self.status = v; }
                 }
+                "approval_request_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.approval_request_id = v; }
+                }
                 "requested_by" => {
                     if let Ok(v) = serde_json::from_value(value) { self.requested_by = v; }
                 }
@@ -276,6 +295,9 @@ impl Promotion {
                 }
                 "appraisal_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.appraisal_id = v; }
+                }
+                "appraisal_rating" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.appraisal_rating = v; }
                 }
                 "reason" => {
                     if let Ok(v) = serde_json::from_value(value) { self.reason = v; }
@@ -335,9 +357,11 @@ impl backbone_orm::EntityRepoMeta for Promotion {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
+        m.insert("approval_request_id".to_string(), "uuid".to_string());
         m.insert("appraisal_id".to_string(), "uuid".to_string());
         m.insert("promotion_type".to_string(), "promotion_type".to_string());
         m.insert("status".to_string(), "promotion_status".to_string());
+        m.insert("effective_date".to_string(), "date".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
@@ -362,9 +386,11 @@ pub struct PromotionBuilder {
     proposed_salary: Option<Decimal>,
     effective_date: Option<NaiveDate>,
     status: Option<PromotionStatus>,
+    approval_request_id: Option<Uuid>,
     requested_by: Option<Uuid>,
     approved_by: Option<Uuid>,
     appraisal_id: Option<Uuid>,
+    appraisal_rating: Option<Decimal>,
     reason: Option<String>,
 }
 
@@ -435,6 +461,12 @@ impl PromotionBuilder {
         self
     }
 
+    /// Set the approval_request_id field (optional)
+    pub fn approval_request_id(mut self, value: Uuid) -> Self {
+        self.approval_request_id = Some(value);
+        self
+    }
+
     /// Set the requested_by field (optional)
     pub fn requested_by(mut self, value: Uuid) -> Self {
         self.requested_by = Some(value);
@@ -450,6 +482,12 @@ impl PromotionBuilder {
     /// Set the appraisal_id field (optional)
     pub fn appraisal_id(mut self, value: Uuid) -> Self {
         self.appraisal_id = Some(value);
+        self
+    }
+
+    /// Set the appraisal_rating field (optional)
+    pub fn appraisal_rating(mut self, value: Decimal) -> Self {
+        self.appraisal_rating = Some(value);
         self
     }
 
@@ -479,9 +517,11 @@ impl PromotionBuilder {
             proposed_salary: self.proposed_salary,
             effective_date,
             status: self.status.unwrap_or_default(),
+            approval_request_id: self.approval_request_id,
             requested_by: self.requested_by,
             approved_by: self.approved_by,
             appraisal_id: self.appraisal_id,
+            appraisal_rating: self.appraisal_rating,
             reason: self.reason,
             metadata: AuditMetadata::default(),
         })

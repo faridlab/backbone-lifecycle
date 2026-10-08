@@ -8,6 +8,9 @@ pub mod error;
 pub use error::{ServiceError, ServiceResult};
 
 pub mod clearance_item_service;
+pub mod contract_service;
+pub mod contract_template_service;
+pub mod discipline_record_service;
 pub mod exit_interview_service;
 pub mod final_settlement_service;
 pub mod offboarding_service;
@@ -16,14 +19,6 @@ pub mod onboarding_task_service;
 pub mod onboarding_template_service;
 pub mod onboarding_template_task_service;
 pub mod promotion_service;
-// The three employment-record entities: generated CRUD services (the write
-// verbs live in their dedicated write services below).
-pub mod contract_service;
-pub mod contract_template_service;
-pub mod discipline_record_service;
-pub use contract_service::ContractService;
-pub use contract_template_service::ContractTemplateService;
-pub use discipline_record_service::DisciplineRecordService;
 
 // <<< CUSTOM
 pub mod pesangon;
@@ -63,6 +58,9 @@ pub mod lifecycle_events;
 // END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
+pub use contract_service::ContractService;
+pub use contract_template_service::ContractTemplateService;
+pub use discipline_record_service::DisciplineRecordService;
 pub use exit_interview_service::ExitInterviewService;
 pub use final_settlement_service::FinalSettlementService;
 pub use offboarding_service::OffboardingService;

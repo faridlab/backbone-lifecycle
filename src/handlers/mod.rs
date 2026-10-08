@@ -10,6 +10,9 @@ use std::sync::Arc;
 
 // Import all services
 use crate::application::service::ClearanceItemService;
+use crate::application::service::ContractService;
+use crate::application::service::ContractTemplateService;
+use crate::application::service::DisciplineRecordService;
 use crate::application::service::ExitInterviewService;
 use crate::application::service::FinalSettlementService;
 use crate::application::service::OffboardingService;
@@ -39,6 +42,12 @@ use crate::application::service::PromotionService;
 pub struct AppState {
     /// ClearanceItem service
     pub clearance_item_service: Arc<ClearanceItemService>,
+    /// Contract service
+    pub contract_service: Arc<ContractService>,
+    /// ContractTemplate service
+    pub contract_template_service: Arc<ContractTemplateService>,
+    /// DisciplineRecord service
+    pub discipline_record_service: Arc<DisciplineRecordService>,
     /// ExitInterview service
     pub exit_interview_service: Arc<ExitInterviewService>,
     /// FinalSettlement service
@@ -61,6 +70,9 @@ impl AppState {
     /// Create a new AppState with all services.
     pub fn new(
         clearance_item_service: Arc<ClearanceItemService>,
+        contract_service: Arc<ContractService>,
+        contract_template_service: Arc<ContractTemplateService>,
+        discipline_record_service: Arc<DisciplineRecordService>,
         exit_interview_service: Arc<ExitInterviewService>,
         final_settlement_service: Arc<FinalSettlementService>,
         offboarding_service: Arc<OffboardingService>,
@@ -72,6 +84,9 @@ impl AppState {
     ) -> Self {
         Self {
             clearance_item_service,
+            contract_service,
+            contract_template_service,
+            discipline_record_service,
             exit_interview_service,
             final_settlement_service,
             offboarding_service,
@@ -87,6 +102,9 @@ impl AppState {
     pub fn from_module(module: &crate::LifecycleModule) -> Self {
         Self {
             clearance_item_service: module.clearance_item_service.clone(),
+            contract_service: module.contract_service.clone(),
+            contract_template_service: module.contract_template_service.clone(),
+            discipline_record_service: module.discipline_record_service.clone(),
             exit_interview_service: module.exit_interview_service.clone(),
             final_settlement_service: module.final_settlement_service.clone(),
             offboarding_service: module.offboarding_service.clone(),
@@ -105,6 +123,9 @@ impl AppState {
 #[derive(Default)]
 pub struct AppStateBuilder {
     clearance_item_service: Option<Arc<ClearanceItemService>>,
+    contract_service: Option<Arc<ContractService>>,
+    contract_template_service: Option<Arc<ContractTemplateService>>,
+    discipline_record_service: Option<Arc<DisciplineRecordService>>,
     exit_interview_service: Option<Arc<ExitInterviewService>>,
     final_settlement_service: Option<Arc<FinalSettlementService>>,
     offboarding_service: Option<Arc<OffboardingService>>,
@@ -124,6 +145,24 @@ impl AppStateBuilder {
     /// Set the ClearanceItem service.
     pub fn with_clearance_item_service(mut self, service: Arc<ClearanceItemService>) -> Self {
         self.clearance_item_service = Some(service);
+        self
+    }
+
+    /// Set the Contract service.
+    pub fn with_contract_service(mut self, service: Arc<ContractService>) -> Self {
+        self.contract_service = Some(service);
+        self
+    }
+
+    /// Set the ContractTemplate service.
+    pub fn with_contract_template_service(mut self, service: Arc<ContractTemplateService>) -> Self {
+        self.contract_template_service = Some(service);
+        self
+    }
+
+    /// Set the DisciplineRecord service.
+    pub fn with_discipline_record_service(mut self, service: Arc<DisciplineRecordService>) -> Self {
+        self.discipline_record_service = Some(service);
         self
     }
 
@@ -183,6 +222,9 @@ impl AppStateBuilder {
     pub fn build(self) -> AppState {
         AppState {
             clearance_item_service: self.clearance_item_service.expect("clearance_item_service is required"),
+            contract_service: self.contract_service.expect("contract_service is required"),
+            contract_template_service: self.contract_template_service.expect("contract_template_service is required"),
+            discipline_record_service: self.discipline_record_service.expect("discipline_record_service is required"),
             exit_interview_service: self.exit_interview_service.expect("exit_interview_service is required"),
             final_settlement_service: self.final_settlement_service.expect("final_settlement_service is required"),
             offboarding_service: self.offboarding_service.expect("offboarding_service is required"),

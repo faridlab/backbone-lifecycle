@@ -7,6 +7,9 @@
 pub mod crud_test_base;
 
 pub mod clearance_item_api_test;
+pub mod contract_api_test;
+pub mod contract_template_api_test;
+pub mod discipline_record_api_test;
 pub mod exit_interview_api_test;
 pub mod final_settlement_api_test;
 pub mod offboarding_api_test;
@@ -18,6 +21,9 @@ pub mod promotion_api_test;
 
 // Re-exports for convenience
 pub use clearance_item_api_test::*;
+pub use contract_api_test::*;
+pub use contract_template_api_test::*;
+pub use discipline_record_api_test::*;
 pub use exit_interview_api_test::*;
 pub use final_settlement_api_test::*;
 pub use offboarding_api_test::*;

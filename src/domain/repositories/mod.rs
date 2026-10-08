@@ -7,6 +7,9 @@
 
 
 pub mod clearance_item_repository;
+pub mod contract_repository;
+pub mod contract_template_repository;
+pub mod discipline_record_repository;
 pub mod exit_interview_repository;
 pub mod final_settlement_repository;
 pub mod offboarding_repository;
@@ -22,6 +25,24 @@ pub use clearance_item_repository::{
     ClearanceItemPaginationParams,
     ClearanceItemPaginatedResult,
     ClearanceItemFilter,
+};
+pub use contract_repository::{
+    ContractRepository,
+    ContractPaginationParams,
+    ContractPaginatedResult,
+    ContractFilter,
+};
+pub use contract_template_repository::{
+    ContractTemplateRepository,
+    ContractTemplatePaginationParams,
+    ContractTemplatePaginatedResult,
+    ContractTemplateFilter,
+};
+pub use discipline_record_repository::{
+    DisciplineRecordRepository,
+    DisciplineRecordPaginationParams,
+    DisciplineRecordPaginatedResult,
+    DisciplineRecordFilter,
 };
 pub use exit_interview_repository::{
     ExitInterviewRepository,

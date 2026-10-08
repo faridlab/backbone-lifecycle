@@ -53,6 +53,7 @@ pub struct PromotionFilter {
     pub department_id_from: Option<Uuid>,
     pub department_id_to: Option<Uuid>,
     pub status: Option<PromotionStatus>,
+    pub approval_request_id: Option<Uuid>,
     pub requested_by: Option<Uuid>,
     pub approved_by: Option<Uuid>,
     pub appraisal_id: Option<Uuid>,
@@ -62,7 +63,7 @@ pub struct PromotionFilter {
 impl PromotionFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.status.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.reason.is_some()
+        self.employee_id.is_some() || self.promotion_type.is_some() || self.position_id_from.is_some() || self.position_id_to.is_some() || self.level_id_from.is_some() || self.level_id_to.is_some() || self.department_id_from.is_some() || self.department_id_to.is_some() || self.status.is_some() || self.approval_request_id.is_some() || self.requested_by.is_some() || self.approved_by.is_some() || self.appraisal_id.is_some() || self.reason.is_some()
     }
 }
 

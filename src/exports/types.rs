@@ -71,6 +71,199 @@ pub struct ClearanceItemRef {
 }
 
 // ============================================================================
+// CONTRACT TYPES
+// ============================================================================
+
+/// Type-safe ID for Contract
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ContractId(pub Uuid);
+
+impl ContractId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for ContractId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ContractId> for Uuid {
+    fn from(id: ContractId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for Contract
+///
+/// This is the public representation of Contract for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractDto {
+    pub id: ContractId,
+    pub employment_id: Uuid,
+    pub employee_id: Uuid,
+    pub contract_type: ContractType,
+    pub contract_no: Option<String>,
+    pub start_date: NaiveDate,
+    pub end_date: Option<NaiveDate>,
+    pub status: ContractStatus,
+    pub document_file_id: Option<Uuid>,
+    pub template_id: Option<Uuid>,
+    pub previous_contract_id: Option<Uuid>,
+    pub cumulative_pkwt_months: i32,
+    pub reminder_sent_at: Option<DateTime<Utc>>,
+    pub created_by: Option<Uuid>,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of Contract for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractSummary {
+    pub id: ContractId,
+    pub status: ContractStatus,
+}
+
+/// Reference to Contract for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractRef {
+    pub id: ContractId,
+}
+
+// ============================================================================
+// CONTRACTTEMPLATE TYPES
+// ============================================================================
+
+/// Type-safe ID for ContractTemplate
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ContractTemplateId(pub Uuid);
+
+impl ContractTemplateId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for ContractTemplateId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ContractTemplateId> for Uuid {
+    fn from(id: ContractTemplateId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for ContractTemplate
+///
+/// This is the public representation of ContractTemplate for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateDto {
+    pub id: ContractTemplateId,
+    pub name: String,
+    pub contract_type: ContractType,
+    pub body_template: String,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of ContractTemplate for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateSummary {
+    pub id: ContractTemplateId,
+    pub name: String,
+}
+
+/// Reference to ContractTemplate for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateRef {
+    pub id: ContractTemplateId,
+}
+
+// ============================================================================
+// DISCIPLINERECORD TYPES
+// ============================================================================
+
+/// Type-safe ID for DisciplineRecord
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DisciplineRecordId(pub Uuid);
+
+impl DisciplineRecordId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for DisciplineRecordId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<DisciplineRecordId> for Uuid {
+    fn from(id: DisciplineRecordId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for DisciplineRecord
+///
+/// This is the public representation of DisciplineRecord for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordDto {
+    pub id: DisciplineRecordId,
+    pub employee_id: Uuid,
+    pub level: DisciplineLevel,
+    pub offense: String,
+    pub description: String,
+    pub issued_at: DateTime<Utc>,
+    pub valid_until: DateTime<Utc>,
+    pub served_disposition: DisciplineServedDisposition,
+    pub status: DisciplineStatus,
+    pub acknowledged_at: Option<DateTime<Utc>>,
+    pub acknowledged_via: Option<String>,
+    pub document_file_id: Option<Uuid>,
+    pub cancel_reason: Option<String>,
+    pub prior_active_sp1: i32,
+    pub prior_active_sp2: i32,
+    pub issued_by: Option<Uuid>,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of DisciplineRecord for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordSummary {
+    pub id: DisciplineRecordId,
+    pub status: DisciplineStatus,
+}
+
+/// Reference to DisciplineRecord for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordRef {
+    pub id: DisciplineRecordId,
+}
+
+// ============================================================================
 // EXITINTERVIEW TYPES
 // ============================================================================
 
@@ -552,9 +745,11 @@ pub struct PromotionDto {
     pub proposed_salary: Option<Decimal>,
     pub effective_date: NaiveDate,
     pub status: PromotionStatus,
+    pub approval_request_id: Option<Uuid>,
     pub requested_by: Option<Uuid>,
     pub approved_by: Option<Uuid>,
     pub appraisal_id: Option<Uuid>,
+    pub appraisal_rating: Option<Decimal>,
     pub reason: Option<String>,
     pub metadata: serde_json::Value,
 }

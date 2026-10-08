@@ -10,6 +10,9 @@ use std::sync::Arc;
 
 use super::{
     clearance_item_handler::create_clearance_item_routes,
+    contract_handler::create_contract_routes,
+    contract_template_handler::create_contract_template_routes,
+    discipline_record_handler::create_discipline_record_routes,
     exit_interview_handler::create_exit_interview_routes,
     final_settlement_handler::create_final_settlement_routes,
     offboarding_handler::create_offboarding_routes,
@@ -22,6 +25,9 @@ use super::{
 
 use crate::application::service::{
     ClearanceItemService,
+    ContractService,
+    ContractTemplateService,
+    DisciplineRecordService,
     ExitInterviewService,
     FinalSettlementService,
     OffboardingService,
@@ -35,6 +41,9 @@ use crate::application::service::{
 /// Services collection for all CRUD endpoints
 pub struct HttpServices {
     pub clearance_item: Arc<ClearanceItemService>,
+    pub contract: Arc<ContractService>,
+    pub contract_template: Arc<ContractTemplateService>,
+    pub discipline_record: Arc<DisciplineRecordService>,
     pub exit_interview: Arc<ExitInterviewService>,
     pub final_settlement: Arc<FinalSettlementService>,
     pub offboarding: Arc<OffboardingService>,
@@ -64,6 +73,12 @@ pub fn configure_routes(services: HttpServices) -> Router {
     Router::new()
         // ClearanceItem routes (12 Backbone endpoints)
         .merge(create_clearance_item_routes(services.clearance_item))
+        // Contract routes (12 Backbone endpoints)
+        .merge(create_contract_routes(services.contract))
+        // ContractTemplate routes (12 Backbone endpoints)
+        .merge(create_contract_template_routes(services.contract_template))
+        // DisciplineRecord routes (12 Backbone endpoints)
+        .merge(create_discipline_record_routes(services.discipline_record))
         // ExitInterview routes (12 Backbone endpoints)
         .merge(create_exit_interview_routes(services.exit_interview))
         // FinalSettlement routes (12 Backbone endpoints)
@@ -88,6 +103,18 @@ pub mod individual {
 
     pub fn clearance_item_routes(service: Arc<ClearanceItemService>) -> Router {
         create_clearance_item_routes(service)
+    }
+
+    pub fn contract_routes(service: Arc<ContractService>) -> Router {
+        create_contract_routes(service)
+    }
+
+    pub fn contract_template_routes(service: Arc<ContractTemplateService>) -> Router {
+        create_contract_template_routes(service)
+    }
+
+    pub fn discipline_record_routes(service: Arc<DisciplineRecordService>) -> Router {
+        create_discipline_record_routes(service)
     }
 
     pub fn exit_interview_routes(service: Arc<ExitInterviewService>) -> Router {

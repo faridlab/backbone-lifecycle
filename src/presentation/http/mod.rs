@@ -6,6 +6,9 @@
 //! to provide all 12 standard Backbone CRUD endpoints.
 
 pub mod clearance_item_handler;
+pub mod contract_handler;
+pub mod contract_template_handler;
+pub mod discipline_record_handler;
 pub mod exit_interview_handler;
 pub mod final_settlement_handler;
 pub mod offboarding_handler;
@@ -14,12 +17,6 @@ pub mod onboarding_task_handler;
 pub mod onboarding_template_handler;
 pub mod onboarding_template_task_handler;
 pub mod promotion_handler;
-// The three employment-record entities: generated CRUD handlers (the read
-// surface mounts in LifecycleModule::readonly_routes; writes stay verb-only
-// except the checkpoint-style template master data).
-pub mod contract_handler;
-pub mod contract_template_handler;
-pub mod discipline_record_handler;
 
 // <<< CUSTOM
 // Guarded composition (read-only CRUD + validated write verbs) — the recommended mount.
@@ -28,6 +25,9 @@ pub mod guarded_routes;
 
 // Re-exports
 pub use clearance_item_handler::{create_clearance_item_routes, create_clearance_item_read_routes, create_clearance_item_write_routes};
+pub use contract_handler::{create_contract_routes, create_contract_read_routes, create_contract_write_routes, create_contract_history_route};
+pub use contract_template_handler::{create_contract_template_routes, create_contract_template_read_routes, create_contract_template_write_routes};
+pub use discipline_record_handler::{create_discipline_record_routes, create_discipline_record_read_routes, create_discipline_record_write_routes, create_discipline_record_history_route};
 pub use exit_interview_handler::{create_exit_interview_routes, create_exit_interview_read_routes, create_exit_interview_write_routes};
 pub use final_settlement_handler::{create_final_settlement_routes, create_final_settlement_read_routes, create_final_settlement_write_routes};
 pub use offboarding_handler::{create_offboarding_routes, create_offboarding_read_routes, create_offboarding_write_routes};
@@ -36,9 +36,6 @@ pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboardi
 pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes};
 pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
 pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
-pub use contract_handler::{create_contract_routes, create_contract_read_routes, create_contract_write_routes};
-pub use contract_template_handler::{create_contract_template_routes, create_contract_template_read_routes, create_contract_template_write_routes};
-pub use discipline_record_handler::{create_discipline_record_routes, create_discipline_record_read_routes, create_discipline_record_write_routes};
 // <<< CUSTOM
 pub use guarded_routes::create_guarded_lifecycle_routes;
 // END CUSTOM

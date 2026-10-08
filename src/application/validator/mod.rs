@@ -6,6 +6,9 @@ pub mod shared_types;
 pub use shared_types::{ValidationError, ValidationErrors, ValidationResult, EntityValidator};
 
 pub mod clearance_item_validator;
+pub mod contract_validator;
+pub mod contract_template_validator;
+pub mod discipline_record_validator;
 pub mod exit_interview_validator;
 pub mod final_settlement_validator;
 pub mod offboarding_validator;
@@ -16,6 +19,9 @@ pub mod onboarding_template_task_validator;
 pub mod promotion_validator;
 
 pub use clearance_item_validator::{ClearanceItemValidator, clearance_item_validator};
+pub use contract_validator::{ContractValidator, contract_validator};
+pub use contract_template_validator::{ContractTemplateValidator, contract_template_validator};
+pub use discipline_record_validator::{DisciplineRecordValidator, discipline_record_validator};
 pub use exit_interview_validator::{ExitInterviewValidator, exit_interview_validator};
 pub use final_settlement_validator::{FinalSettlementValidator, final_settlement_validator};
 pub use offboarding_validator::{OffboardingValidator, offboarding_validator};

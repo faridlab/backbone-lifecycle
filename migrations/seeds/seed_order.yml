@@ -18,3 +18,8 @@
 # Newly added seeds (preserve manual order above):
 - onboarding_template_task_seed
 - onboarding_template_seed
+
+# Newly added seeds (preserve manual order above):
+- contract_template_seed
+- contract_seed
+- discipline_record_seed

@@ -303,6 +303,9 @@ impl backbone_orm::EntityRepoMeta for DisciplineRecord {
         m.insert("level".to_string(), "discipline_level".to_string());
         m.insert("served_disposition".to_string(), "discipline_served_disposition".to_string());
         m.insert("status".to_string(), "discipline_status".to_string());
+        m.insert("issued_at".to_string(), "timestamptz".to_string());
+        m.insert("valid_until".to_string(), "timestamptz".to_string());
+        m.insert("acknowledged_at".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

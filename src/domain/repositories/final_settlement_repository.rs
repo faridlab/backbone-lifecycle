@@ -47,6 +47,8 @@ pub struct FinalSettlementFilter {
     pub employee_id: Option<Uuid>,
     pub offboarding_id: Option<Uuid>,
     pub period: Option<String>,
+    pub legal_basis: Option<String>,
+    pub last_pay_via_payroll: Option<bool>,
     pub status: Option<SettlementStatus>,
     pub accounting_post_id: Option<Uuid>,
     pub journal_id: Option<Uuid>,
@@ -55,7 +57,7 @@ pub struct FinalSettlementFilter {
 impl FinalSettlementFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
+        self.employee_id.is_some() || self.offboarding_id.is_some() || self.period.is_some() || self.legal_basis.is_some() || self.last_pay_via_payroll.is_some() || self.status.is_some() || self.accounting_post_id.is_some() || self.journal_id.is_some()
     }
 }
 

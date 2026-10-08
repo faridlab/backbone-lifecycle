@@ -30,6 +30,15 @@ pub use events::*;
 /// - `ClearanceItemDto` - Data transfer object for ClearanceItem
 /// - `ClearanceItemSummary` - Summary view of ClearanceItem
 /// - `ClearanceItemId` - Type-safe ID wrapper
+/// - `ContractDto` - Data transfer object for Contract
+/// - `ContractSummary` - Summary view of Contract
+/// - `ContractId` - Type-safe ID wrapper
+/// - `ContractTemplateDto` - Data transfer object for ContractTemplate
+/// - `ContractTemplateSummary` - Summary view of ContractTemplate
+/// - `ContractTemplateId` - Type-safe ID wrapper
+/// - `DisciplineRecordDto` - Data transfer object for DisciplineRecord
+/// - `DisciplineRecordSummary` - Summary view of DisciplineRecord
+/// - `DisciplineRecordId` - Type-safe ID wrapper
 /// - `ExitInterviewDto` - Data transfer object for ExitInterview
 /// - `ExitInterviewSummary` - Summary view of ExitInterview
 /// - `ExitInterviewId` - Type-safe ID wrapper
@@ -59,6 +68,15 @@ pub use events::*;
 /// - `ClearanceItemCreatedEvent` - Published when ClearanceItem is created
 /// - `ClearanceItemUpdatedEvent` - Published when ClearanceItem is updated
 /// - `ClearanceItemDeletedEvent` - Published when ClearanceItem is deleted
+/// - `ContractCreatedEvent` - Published when Contract is created
+/// - `ContractUpdatedEvent` - Published when Contract is updated
+/// - `ContractDeletedEvent` - Published when Contract is deleted
+/// - `ContractTemplateCreatedEvent` - Published when ContractTemplate is created
+/// - `ContractTemplateUpdatedEvent` - Published when ContractTemplate is updated
+/// - `ContractTemplateDeletedEvent` - Published when ContractTemplate is deleted
+/// - `DisciplineRecordCreatedEvent` - Published when DisciplineRecord is created
+/// - `DisciplineRecordUpdatedEvent` - Published when DisciplineRecord is updated
+/// - `DisciplineRecordDeletedEvent` - Published when DisciplineRecord is deleted
 /// - `ExitInterviewCreatedEvent` - Published when ExitInterview is created
 /// - `ExitInterviewUpdatedEvent` - Published when ExitInterview is updated
 /// - `ExitInterviewDeletedEvent` - Published when ExitInterview is deleted

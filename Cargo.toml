@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "Employee lifecycle: onboarding and offboarding with templates and tasks, contracts, promotions, discipline records, exit interviews, clearance and final settlement"
 license = "MIT OR Apache-2.0"
@@ -20,24 +20,24 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { version = "2.7.35", features = ["postgres"] }
-backbone-orm = { version = "2.7.35" }
+backbone-core = { version = "3.0.0", features = ["postgres"] }
+backbone-orm = { version = "3.0.0" }
 # The axum feature: guarded-route handlers extract `OrgContext` (the acting org node off the
 # signed token) as an axum extractor — the org_auth surface the composing service mounts.
-backbone-auth = { version = "2.7.35", features = ["axum"] }
-backbone-messaging = { version = "2.7.35" }
+backbone-auth = { version = "3.0.0", features = ["axum"] }
+backbone-messaging = { version = "3.0.0" }
 # Transactional-outbox producer (ADR-005): stages `promotion.effective` / `onboarding.completed` /
 # `offboarding.closed` in the same tx as the lifecycle state change. v2.7.4 is where backbone-outbox
 # 0.2.0 (with the company-RLS fence) ships; the HR composer's [patch] block unifies it onto local
 # HEAD for dev. No features needed on the producer side — `runner`/`multi_tenant` are the relay's
 # concern (backbone-hr-app).
-backbone-outbox = { version = "2.7.35" }
+backbone-outbox = { version = "3.0.0" }
 # GL-posting port (the single seam producers reach accounting through): the final-settlement
 # confirm verb builds its balanced envelope with these types and pushes it through a
 # `GlPostSink` the host app wires at composition time. v2.7.7 is where the envelope carried
 # the party-tagged lines the settlement needs. Lifecycle never depends on backbone-accounting
 # itself — the port crate is the whole contract.
-backbone-gl-posting = { version = "2.7.35" }
+backbone-gl-posting = { version = "3.0.0" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }
@@ -107,8 +107,8 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 # backbone-payroll + backbone-timeoff: the integration tests drive the producers here, then run the
 # consumers to prove the end-to-end outbox flow + idempotency. Dev-only — production never depends
 # lifecycle→employee/payroll/timeoff (the composer wires them, never the modules directly).
-backbone-employee = { version = "0.2.45" }
-backbone-payroll = { version = "0.3.49" }
-backbone-timeoff = { version = "0.4.33" }
+backbone-employee = { version = "0.3.0" }
+backbone-payroll = { version = "0.4.0" }
+backbone-timeoff = { version = "0.5.0" }
 jsonwebtoken = "9.3"
 rand = "0.8"

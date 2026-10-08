@@ -7,6 +7,9 @@
 pub use backbone_core::{Specification, AndSpecification, OrSpecification, NotSpecification};
 
 pub mod clearance_item_specification;
+pub mod contract_specification;
+pub mod contract_template_specification;
+pub mod discipline_record_specification;
 pub mod exit_interview_specification;
 pub mod final_settlement_specification;
 pub mod offboarding_specification;

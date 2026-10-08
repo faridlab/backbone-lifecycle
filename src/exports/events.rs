@@ -38,6 +38,87 @@ pub struct ClearanceItemDeletedEvent {
 }
 
 // ============================================================================
+// CONTRACT EVENTS
+// ============================================================================
+
+/// Event published when a Contract is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractCreatedEvent {
+    pub id: ContractId,
+    pub data: ContractDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a Contract is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractUpdatedEvent {
+    pub id: ContractId,
+    pub data: ContractDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a Contract is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractDeletedEvent {
+    pub id: ContractId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// CONTRACTTEMPLATE EVENTS
+// ============================================================================
+
+/// Event published when a ContractTemplate is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateCreatedEvent {
+    pub id: ContractTemplateId,
+    pub data: ContractTemplateDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a ContractTemplate is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateUpdatedEvent {
+    pub id: ContractTemplateId,
+    pub data: ContractTemplateDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a ContractTemplate is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplateDeletedEvent {
+    pub id: ContractTemplateId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// DISCIPLINERECORD EVENTS
+// ============================================================================
+
+/// Event published when a DisciplineRecord is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordCreatedEvent {
+    pub id: DisciplineRecordId,
+    pub data: DisciplineRecordDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a DisciplineRecord is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordUpdatedEvent {
+    pub id: DisciplineRecordId,
+    pub data: DisciplineRecordDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a DisciplineRecord is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisciplineRecordDeletedEvent {
+    pub id: DisciplineRecordId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
 // EXITINTERVIEW EVENTS
 // ============================================================================
 
@@ -264,6 +345,15 @@ pub enum LifecycleEvent {
     ClearanceItemCreated(ClearanceItemCreatedEvent),
     ClearanceItemUpdated(ClearanceItemUpdatedEvent),
     ClearanceItemDeleted(ClearanceItemDeletedEvent),
+    ContractCreated(ContractCreatedEvent),
+    ContractUpdated(ContractUpdatedEvent),
+    ContractDeleted(ContractDeletedEvent),
+    ContractTemplateCreated(ContractTemplateCreatedEvent),
+    ContractTemplateUpdated(ContractTemplateUpdatedEvent),
+    ContractTemplateDeleted(ContractTemplateDeletedEvent),
+    DisciplineRecordCreated(DisciplineRecordCreatedEvent),
+    DisciplineRecordUpdated(DisciplineRecordUpdatedEvent),
+    DisciplineRecordDeleted(DisciplineRecordDeletedEvent),
     ExitInterviewCreated(ExitInterviewCreatedEvent),
     ExitInterviewUpdated(ExitInterviewUpdatedEvent),
     ExitInterviewDeleted(ExitInterviewDeletedEvent),

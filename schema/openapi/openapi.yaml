@@ -13,6 +13,12 @@ servers:
 tags:
   - name: ClearanceItems
     description: ClearanceItem management endpoints
+  - name: Contracts
+    description: Contract management endpoints
+  - name: ContractTemplates
+    description: ContractTemplate management endpoints
+  - name: DisciplineRecords
+    description: DisciplineRecord management endpoints
   - name: ExitInterviews
     description: ExitInterview management endpoints
   - name: FinalSettlements
@@ -383,6 +389,1104 @@ paths:
         - ClearanceItems
       summary: Bulk permanently-delete ClearanceItems from trash by ids (atomic)
       operationId: bulkPermanentDeleteClearanceItems
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contracts:
+    get:
+      tags:
+        - Contracts
+      summary: List Contracts
+      description: Get a paginated list of Contracts with optional filtering and sorting
+      operationId: listContracts
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Contracts
+      summary: Create Contract
+      description: Create a new Contract
+      operationId: createContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContractRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/lifecycle/contracts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - Contracts
+      summary: Get Contract by ID
+      operationId: getContract
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Contracts
+      summary: Update Contract (full)
+      operationId: updateContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Contracts
+      summary: Update Contract (partial)
+      operationId: patchContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchContractRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Contracts
+      summary: Delete Contract (soft)
+      operationId: deleteContract
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/contracts/bulk:
+    post:
+      tags:
+        - Contracts
+      summary: Bulk create Contracts
+      operationId: bulkCreateContracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateContractRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contract'
+    put:
+      tags:
+        - Contracts
+      summary: Bulk update Contracts (full, atomic)
+      operationId: bulkUpdateContracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateContractRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - Contracts
+      summary: Bulk partial-update Contracts (atomic)
+      operationId: bulkPatchContracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contracts/upsert:
+    post:
+      tags:
+        - Contracts
+      summary: Upsert Contract
+      operationId: upsertContract
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+
+  /api/v1/lifecycle/contracts/trash:
+    get:
+      tags:
+        - Contracts
+      summary: List deleted Contracts
+      operationId: listDeletedContracts
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractList'
+
+  /api/v1/lifecycle/contracts/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - Contracts
+      summary: Restore deleted Contract
+      operationId: restoreContract
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/contracts/empty:
+    delete:
+      tags:
+        - Contracts
+      summary: Empty trash for Contracts
+      operationId: emptyTrashContracts
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/lifecycle/contracts/delete/bulk:
+    post:
+      tags:
+        - Contracts
+      summary: Bulk soft-delete Contracts by ids (atomic)
+      operationId: bulkDeleteContracts
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contracts/restore/bulk:
+    post:
+      tags:
+        - Contracts
+      summary: Bulk restore Contracts by ids (atomic)
+      operationId: bulkRestoreContracts
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contracts/restore/all:
+    post:
+      tags:
+        - Contracts
+      summary: Restore all soft-deleted Contracts
+      operationId: restoreAllContracts
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/lifecycle/contracts/trash/bulk:
+    delete:
+      tags:
+        - Contracts
+      summary: Bulk permanently-delete Contracts from trash by ids (atomic)
+      operationId: bulkPermanentDeleteContracts
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contract_templates:
+    get:
+      tags:
+        - ContractTemplates
+      summary: List ContractTemplates
+      description: Get a paginated list of ContractTemplates with optional filtering and sorting
+      operationId: listContractTemplates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplateList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - ContractTemplates
+      summary: Create ContractTemplate
+      description: Create a new ContractTemplate
+      operationId: createContractTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContractTemplateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/lifecycle/contract_templates/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - ContractTemplates
+      summary: Get ContractTemplate by ID
+      operationId: getContractTemplate
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - ContractTemplates
+      summary: Update ContractTemplate (full)
+      operationId: updateContractTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - ContractTemplates
+      summary: Update ContractTemplate (partial)
+      operationId: patchContractTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchContractTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - ContractTemplates
+      summary: Delete ContractTemplate (soft)
+      operationId: deleteContractTemplate
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/contract_templates/bulk:
+    post:
+      tags:
+        - ContractTemplates
+      summary: Bulk create ContractTemplates
+      operationId: bulkCreateContractTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateContractTemplateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContractTemplate'
+    put:
+      tags:
+        - ContractTemplates
+      summary: Bulk update ContractTemplates (full, atomic)
+      operationId: bulkUpdateContractTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateContractTemplateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - ContractTemplates
+      summary: Bulk partial-update ContractTemplates (atomic)
+      operationId: bulkPatchContractTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contract_templates/upsert:
+    post:
+      tags:
+        - ContractTemplates
+      summary: Upsert ContractTemplate
+      operationId: upsertContractTemplate
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContractTemplateRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+
+  /api/v1/lifecycle/contract_templates/trash:
+    get:
+      tags:
+        - ContractTemplates
+      summary: List deleted ContractTemplates
+      operationId: listDeletedContractTemplates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplateList'
+
+  /api/v1/lifecycle/contract_templates/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - ContractTemplates
+      summary: Restore deleted ContractTemplate
+      operationId: restoreContractTemplate
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/contract_templates/empty:
+    delete:
+      tags:
+        - ContractTemplates
+      summary: Empty trash for ContractTemplates
+      operationId: emptyTrashContractTemplates
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/lifecycle/contract_templates/delete/bulk:
+    post:
+      tags:
+        - ContractTemplates
+      summary: Bulk soft-delete ContractTemplates by ids (atomic)
+      operationId: bulkDeleteContractTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contract_templates/restore/bulk:
+    post:
+      tags:
+        - ContractTemplates
+      summary: Bulk restore ContractTemplates by ids (atomic)
+      operationId: bulkRestoreContractTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractTemplateBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/contract_templates/restore/all:
+    post:
+      tags:
+        - ContractTemplates
+      summary: Restore all soft-deleted ContractTemplates
+      operationId: restoreAllContractTemplates
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/lifecycle/contract_templates/trash/bulk:
+    delete:
+      tags:
+        - ContractTemplates
+      summary: Bulk permanently-delete ContractTemplates from trash by ids (atomic)
+      operationId: bulkPermanentDeleteContractTemplates
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/discipline_records:
+    get:
+      tags:
+        - DisciplineRecords
+      summary: List DisciplineRecords
+      description: Get a paginated list of DisciplineRecords with optional filtering and sorting
+      operationId: listDisciplineRecords
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecordList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Create DisciplineRecord
+      description: Create a new DisciplineRecord
+      operationId: createDisciplineRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisciplineRecordRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/lifecycle/discipline_records/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - DisciplineRecords
+      summary: Get DisciplineRecord by ID
+      operationId: getDisciplineRecord
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - DisciplineRecords
+      summary: Update DisciplineRecord (full)
+      operationId: updateDisciplineRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDisciplineRecordRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - DisciplineRecords
+      summary: Update DisciplineRecord (partial)
+      operationId: patchDisciplineRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchDisciplineRecordRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - DisciplineRecords
+      summary: Delete DisciplineRecord (soft)
+      operationId: deleteDisciplineRecord
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/discipline_records/bulk:
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Bulk create DisciplineRecords
+      operationId: bulkCreateDisciplineRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateDisciplineRecordRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DisciplineRecord'
+    put:
+      tags:
+        - DisciplineRecords
+      summary: Bulk update DisciplineRecords (full, atomic)
+      operationId: bulkUpdateDisciplineRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateDisciplineRecordRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecordBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - DisciplineRecords
+      summary: Bulk partial-update DisciplineRecords (atomic)
+      operationId: bulkPatchDisciplineRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecordBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/discipline_records/upsert:
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Upsert DisciplineRecord
+      operationId: upsertDisciplineRecord
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDisciplineRecordRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+
+  /api/v1/lifecycle/discipline_records/trash:
+    get:
+      tags:
+        - DisciplineRecords
+      summary: List deleted DisciplineRecords
+      operationId: listDeletedDisciplineRecords
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecordList'
+
+  /api/v1/lifecycle/discipline_records/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Restore deleted DisciplineRecord
+      operationId: restoreDisciplineRecord
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/lifecycle/discipline_records/empty:
+    delete:
+      tags:
+        - DisciplineRecords
+      summary: Empty trash for DisciplineRecords
+      operationId: emptyTrashDisciplineRecords
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/lifecycle/discipline_records/delete/bulk:
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Bulk soft-delete DisciplineRecords by ids (atomic)
+      operationId: bulkDeleteDisciplineRecords
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/discipline_records/restore/bulk:
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Bulk restore DisciplineRecords by ids (atomic)
+      operationId: bulkRestoreDisciplineRecords
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecordBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/lifecycle/discipline_records/restore/all:
+    post:
+      tags:
+        - DisciplineRecords
+      summary: Restore all soft-deleted DisciplineRecords
+      operationId: restoreAllDisciplineRecords
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/lifecycle/discipline_records/trash/bulk:
+    delete:
+      tags:
+        - DisciplineRecords
+      summary: Bulk permanently-delete DisciplineRecords from trash by ids (atomic)
+      operationId: bulkPermanentDeleteDisciplineRecords
       requestBody:
         $ref: '#/components/requestBodies/BatchIds'
       responses:
@@ -3437,6 +4541,602 @@ components:
         meta:
           $ref: '#/components/schemas/PaginationMeta'
 
+    Contract:
+      type: object
+      required:
+        - id
+        - employment_id
+        - employee_id
+        - contract_type
+        - start_date
+        - status
+        - cumulative_pkwt_months
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        employment_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        contract_type:
+          type: string
+        contract_no:
+          nullable: true
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          nullable: true
+          type: string
+          format: date
+        status:
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        template_id:
+          nullable: true
+          type: string
+          format: uuid
+        previous_contract_id:
+          nullable: true
+          type: string
+          format: uuid
+        cumulative_pkwt_months:
+          type: integer
+          format: int32
+        reminder_sent_at:
+          nullable: true
+          type: string
+          format: date-time
+        created_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    ContractBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contract'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateContractRequest:
+      type: object
+      required:
+        - employment_id
+        - employee_id
+        - contract_type
+        - start_date
+        - status
+        - cumulative_pkwt_months
+        - metadata
+      properties:
+        employment_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        contract_type:
+          type: string
+        contract_no:
+          nullable: true
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          nullable: true
+          type: string
+          format: date
+        status:
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        template_id:
+          nullable: true
+          type: string
+          format: uuid
+        previous_contract_id:
+          nullable: true
+          type: string
+          format: uuid
+        cumulative_pkwt_months:
+          type: integer
+          format: int32
+        reminder_sent_at:
+          nullable: true
+          type: string
+          format: date-time
+        created_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    UpdateContractRequest:
+      type: object
+      required:
+        - employment_id
+        - employee_id
+        - contract_type
+        - start_date
+        - status
+        - cumulative_pkwt_months
+        - metadata
+      properties:
+        employment_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        contract_type:
+          type: string
+        contract_no:
+          nullable: true
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          nullable: true
+          type: string
+          format: date
+        status:
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        template_id:
+          nullable: true
+          type: string
+          format: uuid
+        previous_contract_id:
+          nullable: true
+          type: string
+          format: uuid
+        cumulative_pkwt_months:
+          type: integer
+          format: int32
+        reminder_sent_at:
+          nullable: true
+          type: string
+          format: date-time
+        created_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    PatchContractRequest:
+      type: object
+      properties:
+        employment_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        contract_type:
+          type: string
+        contract_no:
+          nullable: true
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          nullable: true
+          type: string
+          format: date
+        status:
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        template_id:
+          nullable: true
+          type: string
+          format: uuid
+        previous_contract_id:
+          nullable: true
+          type: string
+          format: uuid
+        cumulative_pkwt_months:
+          type: integer
+          format: int32
+        reminder_sent_at:
+          nullable: true
+          type: string
+          format: date-time
+        created_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    ContractList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contract'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ContractTemplate:
+      type: object
+      required:
+        - id
+        - name
+        - contract_type
+        - body_template
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        contract_type:
+          type: string
+        body_template:
+          type: string
+        metadata:
+          type: object
+
+    ContractTemplateBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractTemplate'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateContractTemplateRequest:
+      type: object
+      required:
+        - name
+        - contract_type
+        - body_template
+        - metadata
+      properties:
+        name:
+          type: string
+        contract_type:
+          type: string
+        body_template:
+          type: string
+        metadata:
+          type: object
+
+    UpdateContractTemplateRequest:
+      type: object
+      required:
+        - name
+        - contract_type
+        - body_template
+        - metadata
+      properties:
+        name:
+          type: string
+        contract_type:
+          type: string
+        body_template:
+          type: string
+        metadata:
+          type: object
+
+    PatchContractTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        contract_type:
+          type: string
+        body_template:
+          type: string
+        metadata:
+          type: object
+
+    ContractTemplateList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractTemplate'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    DisciplineRecord:
+      type: object
+      required:
+        - id
+        - employee_id
+        - level
+        - offense
+        - description
+        - issued_at
+        - valid_until
+        - served_disposition
+        - status
+        - prior_active_sp1
+        - prior_active_sp2
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+        offense:
+          type: string
+        description:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        served_disposition:
+          type: string
+        status:
+          type: string
+        acknowledged_at:
+          nullable: true
+          type: string
+          format: date-time
+        acknowledged_via:
+          nullable: true
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        cancel_reason:
+          nullable: true
+          type: string
+        prior_active_sp1:
+          type: integer
+          format: int32
+        prior_active_sp2:
+          type: integer
+          format: int32
+        issued_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    DisciplineRecordBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisciplineRecord'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateDisciplineRecordRequest:
+      type: object
+      required:
+        - employee_id
+        - level
+        - offense
+        - description
+        - issued_at
+        - valid_until
+        - served_disposition
+        - status
+        - prior_active_sp1
+        - prior_active_sp2
+        - metadata
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+        offense:
+          type: string
+        description:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        served_disposition:
+          type: string
+        status:
+          type: string
+        acknowledged_at:
+          nullable: true
+          type: string
+          format: date-time
+        acknowledged_via:
+          nullable: true
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        cancel_reason:
+          nullable: true
+          type: string
+        prior_active_sp1:
+          type: integer
+          format: int32
+        prior_active_sp2:
+          type: integer
+          format: int32
+        issued_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    UpdateDisciplineRecordRequest:
+      type: object
+      required:
+        - employee_id
+        - level
+        - offense
+        - description
+        - issued_at
+        - valid_until
+        - served_disposition
+        - status
+        - prior_active_sp1
+        - prior_active_sp2
+        - metadata
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+        offense:
+          type: string
+        description:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        served_disposition:
+          type: string
+        status:
+          type: string
+        acknowledged_at:
+          nullable: true
+          type: string
+          format: date-time
+        acknowledged_via:
+          nullable: true
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        cancel_reason:
+          nullable: true
+          type: string
+        prior_active_sp1:
+          type: integer
+          format: int32
+        prior_active_sp2:
+          type: integer
+          format: int32
+        issued_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    PatchDisciplineRecordRequest:
+      type: object
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+        offense:
+          type: string
+        description:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        served_disposition:
+          type: string
+        status:
+          type: string
+        acknowledged_at:
+          nullable: true
+          type: string
+          format: date-time
+        acknowledged_via:
+          nullable: true
+          type: string
+        document_file_id:
+          nullable: true
+          type: string
+          format: uuid
+        cancel_reason:
+          nullable: true
+          type: string
+        prior_active_sp1:
+          type: integer
+          format: int32
+        prior_active_sp2:
+          type: integer
+          format: int32
+        issued_by:
+          nullable: true
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    DisciplineRecordList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisciplineRecord'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
     ExitInterview:
       type: object
       required:
@@ -3572,6 +5272,7 @@ components:
         - offboarding_id
         - period
         - base_pay
+        - last_pay_via_payroll
         - net_payable
         - status
         - metadata
@@ -3595,6 +5296,40 @@ components:
         pesangon_amount:
           nullable: true
           type: string
+        uang_pesangon:
+          nullable: true
+          type: string
+        upmk:
+          nullable: true
+          type: string
+        uang_pisah:
+          nullable: true
+          type: string
+        monthly_wage:
+          nullable: true
+          type: string
+        daily_wage:
+          nullable: true
+          type: string
+        work_days_per_week:
+          nullable: true
+          type: integer
+          format: int32
+        unused_leave_days:
+          nullable: true
+          type: string
+        tenure_years:
+          nullable: true
+          type: string
+        legal_basis:
+          nullable: true
+          type: string
+        statutory_effective_from:
+          nullable: true
+          type: string
+          format: date
+        last_pay_via_payroll:
+          type: boolean
         tax_deduction:
           nullable: true
           type: string
@@ -3633,6 +5368,7 @@ components:
         - offboarding_id
         - period
         - base_pay
+        - last_pay_via_payroll
         - net_payable
         - status
         - metadata
@@ -3653,6 +5389,40 @@ components:
         pesangon_amount:
           nullable: true
           type: string
+        uang_pesangon:
+          nullable: true
+          type: string
+        upmk:
+          nullable: true
+          type: string
+        uang_pisah:
+          nullable: true
+          type: string
+        monthly_wage:
+          nullable: true
+          type: string
+        daily_wage:
+          nullable: true
+          type: string
+        work_days_per_week:
+          nullable: true
+          type: integer
+          format: int32
+        unused_leave_days:
+          nullable: true
+          type: string
+        tenure_years:
+          nullable: true
+          type: string
+        legal_basis:
+          nullable: true
+          type: string
+        statutory_effective_from:
+          nullable: true
+          type: string
+          format: date
+        last_pay_via_payroll:
+          type: boolean
         tax_deduction:
           nullable: true
           type: string
@@ -3678,6 +5448,7 @@ components:
         - offboarding_id
         - period
         - base_pay
+        - last_pay_via_payroll
         - net_payable
         - status
         - metadata
@@ -3698,6 +5469,40 @@ components:
         pesangon_amount:
           nullable: true
           type: string
+        uang_pesangon:
+          nullable: true
+          type: string
+        upmk:
+          nullable: true
+          type: string
+        uang_pisah:
+          nullable: true
+          type: string
+        monthly_wage:
+          nullable: true
+          type: string
+        daily_wage:
+          nullable: true
+          type: string
+        work_days_per_week:
+          nullable: true
+          type: integer
+          format: int32
+        unused_leave_days:
+          nullable: true
+          type: string
+        tenure_years:
+          nullable: true
+          type: string
+        legal_basis:
+          nullable: true
+          type: string
+        statutory_effective_from:
+          nullable: true
+          type: string
+          format: date
+        last_pay_via_payroll:
+          type: boolean
         tax_deduction:
           nullable: true
           type: string
@@ -3735,6 +5540,40 @@ components:
         pesangon_amount:
           nullable: true
           type: string
+        uang_pesangon:
+          nullable: true
+          type: string
+        upmk:
+          nullable: true
+          type: string
+        uang_pisah:
+          nullable: true
+          type: string
+        monthly_wage:
+          nullable: true
+          type: string
+        daily_wage:
+          nullable: true
+          type: string
+        work_days_per_week:
+          nullable: true
+          type: integer
+          format: int32
+        unused_leave_days:
+          nullable: true
+          type: string
+        tenure_years:
+          nullable: true
+          type: string
+        legal_basis:
+          nullable: true
+          type: string
+        statutory_effective_from:
+          nullable: true
+          type: string
+          format: date
+        last_pay_via_payroll:
+          type: boolean
         tax_deduction:
           nullable: true
           type: string
@@ -4476,6 +6315,10 @@ components:
           format: date
         status:
           type: string
+        approval_request_id:
+          nullable: true
+          type: string
+          format: uuid
         requested_by:
           nullable: true
           type: string
@@ -4488,6 +6331,9 @@ components:
           nullable: true
           type: string
           format: uuid
+        appraisal_rating:
+          nullable: true
+          type: string
         reason:
           nullable: true
           type: string
@@ -4553,6 +6399,10 @@ components:
           format: date
         status:
           type: string
+        approval_request_id:
+          nullable: true
+          type: string
+          format: uuid
         requested_by:
           nullable: true
           type: string
@@ -4565,6 +6415,9 @@ components:
           nullable: true
           type: string
           format: uuid
+        appraisal_rating:
+          nullable: true
+          type: string
         reason:
           nullable: true
           type: string
@@ -4617,6 +6470,10 @@ components:
           format: date
         status:
           type: string
+        approval_request_id:
+          nullable: true
+          type: string
+          format: uuid
         requested_by:
           nullable: true
           type: string
@@ -4629,6 +6486,9 @@ components:
           nullable: true
           type: string
           format: uuid
+        appraisal_rating:
+          nullable: true
+          type: string
         reason:
           nullable: true
           type: string
@@ -4675,6 +6535,10 @@ components:
           format: date
         status:
           type: string
+        approval_request_id:
+          nullable: true
+          type: string
+          format: uuid
         requested_by:
           nullable: true
           type: string
@@ -4687,6 +6551,9 @@ components:
           nullable: true
           type: string
           format: uuid
+        appraisal_rating:
+          nullable: true
+          type: string
         reason:
           nullable: true
           type: string

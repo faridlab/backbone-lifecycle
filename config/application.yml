@@ -83,6 +83,27 @@ entities:
     pagination:
       default_limit: 20
       max_limit: 100
+  contract:
+    collection: contracts
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  contract_template:
+    collection: contract_templates
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  discipline_record:
+    collection: discipline_records
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
 tracing:
   enabled: true
   exporter: otlp

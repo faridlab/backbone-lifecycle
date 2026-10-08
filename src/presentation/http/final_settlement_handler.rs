@@ -10,6 +10,7 @@ use std::sync::Arc;
 use axum::Router;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use chrono::{NaiveDate};
 use rust_decimal::Decimal;
 
 // Backbone framework imports
@@ -50,6 +51,7 @@ impl From<ServiceError> for FinalSettlementError {
             ServiceError::AlreadyExists(ref msg) => Self::Validation(msg.clone()),
             ServiceError::Repository(ref e) => Self::Database(e.to_string()),
             ServiceError::Internal(ref msg) => Self::Internal(msg.clone()),
+            ServiceError::Violations(_) => Self::Validation(err.to_string()),
         }
     }
 }

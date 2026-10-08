@@ -5,6 +5,9 @@
 //! Uses backbone-orm's `DatabaseOperations<T>` trait.
 
 mod clearance_item_repository;
+mod contract_repository;
+mod contract_template_repository;
+mod discipline_record_repository;
 mod exit_interview_repository;
 mod final_settlement_repository;
 mod offboarding_repository;
@@ -14,12 +17,6 @@ mod onboarding_template_repository;
 mod onboarding_template_task_repository;
 mod promotion_repository;
 
-// The three employment-record entities (contracts, contract templates,
-// discipline records): generated repositories, wired for the read surface.
-mod contract_repository;
-mod contract_template_repository;
-mod discipline_record_repository;
-
 // Custom persistence modules
 // <<< CUSTOM
 // The statutory severance set (effective-dated) and the settlement settings.
@@ -28,6 +25,9 @@ pub mod severance_params_repository;
 
 // Re-exports
 pub use clearance_item_repository::ClearanceItemRepository;
+pub use contract_repository::ContractRepository;
+pub use contract_template_repository::ContractTemplateRepository;
+pub use discipline_record_repository::DisciplineRecordRepository;
 pub use exit_interview_repository::ExitInterviewRepository;
 pub use final_settlement_repository::FinalSettlementRepository;
 pub use offboarding_repository::OffboardingRepository;
@@ -36,9 +36,6 @@ pub use onboarding_task_repository::OnboardingTaskRepository;
 pub use onboarding_template_repository::OnboardingTemplateRepository;
 pub use onboarding_template_task_repository::OnboardingTemplateTaskRepository;
 pub use promotion_repository::PromotionRepository;
-pub use contract_repository::ContractRepository;
-pub use contract_template_repository::ContractTemplateRepository;
-pub use discipline_record_repository::DisciplineRecordRepository;
 
 // Re-export backbone-orm types
 pub use backbone_orm::repository::{

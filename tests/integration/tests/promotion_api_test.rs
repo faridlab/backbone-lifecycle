@@ -33,9 +33,11 @@ impl TestDataGenerator for PromotionTestData {
             "proposed_salary": null,
             "effective_date": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "draft",
+            "approval_request_id": null,
             "requested_by": null,
             "approved_by": null,
             "appraisal_id": null,
+            "appraisal_rating": null,
             "reason": null,
             "metadata": json!({}),
         })
@@ -55,9 +57,11 @@ impl TestDataGenerator for PromotionTestData {
             "proposed_salary": null,
             "effective_date": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "draft",
+            "approval_request_id": null,
             "requested_by": null,
             "approved_by": null,
             "appraisal_id": null,
+            "appraisal_rating": null,
             "reason": null,
             "metadata": json!({}),
         })

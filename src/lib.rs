@@ -204,7 +204,7 @@ impl LifecycleModule {
 /// Builder for LifecycleModule
 pub struct LifecycleModuleBuilder {
     db_pool: Option<PgPool>,
-    // <<< CUSTOM
+    // <<< CUSTOM BUILDER FIELDS
     // ADR-005 offboarding producer: optional override for the settlement input port. When unset,
     // build() falls back to a pool-backed OffboardingInputs — so the composer's
     // `with_database(pool).build()` keeps working unchanged. The statutory severance numbers are
@@ -224,7 +224,7 @@ impl LifecycleModuleBuilder {
     pub fn new() -> Self {
         Self {
             db_pool: None,
-            // <<< CUSTOM
+            // <<< CUSTOM BUILDER DEFAULTS
             offboarding_inputs: None,
             activity_sink: None,
             gl_sink: None,

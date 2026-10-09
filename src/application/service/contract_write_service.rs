@@ -270,8 +270,14 @@ impl ContractWriteService {
                 if contract_type != "pkwt" {
                     return Err(ContractError::Invalid("only a pkwt contract renews (a pkwtt is indefinite)".into()));
                 }
-                if new_end_date.is_none() {
+                let Some(new_end) = new_end_date else {
                     return Err(ContractError::Invalid("a renewal needs the new end_date".into()));
+                };
+                let start = renewal_start(end_date, Utc::now().date_naive());
+                if new_end <= start {
+                    return Err(ContractError::Invalid(format!(
+                        "the renewal starts {start}, the day after the current contract ends; its new end_date must be later"
+                    )));
                 }
             }
             ContractDecision::Convert => {
@@ -359,8 +365,18 @@ impl ContractWriteService {
                     None
                 };
                 let today = Utc::now().date_naive();
+                // A renewal starts the day after the running contract ends; a
+                // conversion takes effect on the decision date.
+                let start = if outcome == ContractDecision::Renew { renewal_start(end_date, today) } else { today };
+                if let Some(end) = new_end {
+                    if end <= start {
+                        return Err(ContractError::Invalid(format!(
+                            "the renewal starts {start}; its new end_date {end} must be later"
+                        )));
+                    }
+                }
                 let cumulative = if new_type == "pkwt" {
-                    prior_cumulative + months_between(today, new_end.expect("checked above"))
+                    prior_cumulative + months_between(start, new_end.expect("checked above"))
                 } else {
                     0 // conversion resets: the chain is now indefinite
                 };
@@ -384,7 +400,7 @@ impl ContractWriteService {
                 .bind(employment_id)
                 .bind(employee_id)
                 .bind(new_type)
-                .bind(today)
+                .bind(start)
                 .bind(new_end)
                 .bind(contract_id)
                 .bind(cumulative)
@@ -521,10 +537,52 @@ impl ContractWriteService {
 }
 
 /// Whole months between two dates (the cap's ledger grain).
+/// The first day of a renewed contract: the day after the running one ends, so a
+/// renewal decided early neither overlaps it nor counts its remaining months twice
+/// against the cap. A contract that has already ended renews from the decision date.
+fn renewal_start(current_end: Option<NaiveDate>, today: NaiveDate) -> NaiveDate {
+    match current_end {
+        Some(end) if end >= today => end.succ_opt().unwrap_or(end),
+        _ => today,
+    }
+}
+
 fn months_between(from: NaiveDate, to: NaiveDate) -> i32 {
     let mut months = (to.year() - from.year()) * 12 + (to.month() as i32 - from.month() as i32);
     if to.day() < from.day() {
         months -= 1;
     }
     months.max(0)
+}
+
+#[cfg(test)]
+mod renewal_start_tests {
+    use super::*;
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    #[test]
+    fn a_renewal_decided_early_starts_the_day_after_the_running_contract_ends() {
+        assert_eq!(renewal_start(Some(d(2026, 12, 31)), d(2026, 10, 9)), d(2027, 1, 1));
+    }
+
+    #[test]
+    fn a_renewal_decided_on_the_last_day_starts_the_next_day() {
+        assert_eq!(renewal_start(Some(d(2026, 10, 9)), d(2026, 10, 9)), d(2026, 10, 10));
+    }
+
+    #[test]
+    fn a_renewal_of_a_contract_that_already_ended_starts_on_the_decision_date() {
+        assert_eq!(renewal_start(Some(d(2026, 9, 30)), d(2026, 10, 9)), d(2026, 10, 9));
+    }
+
+    #[test]
+    fn the_cap_counts_the_renewed_term_from_its_real_start() {
+        // A year-long renewal decided three months early is twelve months, not fifteen.
+        let start = renewal_start(Some(d(2026, 12, 31)), d(2026, 10, 1));
+        assert_eq!(months_between(start, d(2027, 12, 31)), 11);
+        assert_eq!(months_between(start, d(2028, 1, 1)), 12);
+    }
 }

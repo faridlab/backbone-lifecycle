@@ -346,7 +346,6 @@ impl ContractWriteService {
         }
         let employment_id: Uuid = row.try_get("employment_id")?;
         let employee_id: Uuid = row.try_get("employee_id")?;
-        let start_date: NaiveDate = row.try_get("start_date")?;
         let prior_cumulative: i32 = row.try_get("cumulative_pkwt_months")?;
         let end_date: Option<NaiveDate> = row.try_get("end_date")?;
 

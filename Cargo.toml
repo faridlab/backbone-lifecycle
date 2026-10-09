@@ -1,6 +1,6 @@
 [package]
 name = "backbone-lifecycle"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Employee lifecycle: onboarding and offboarding with templates and tasks, contracts, promotions, discipline records, exit interviews, clearance and final settlement"
 license = "MIT OR Apache-2.0"

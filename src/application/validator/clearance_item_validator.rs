@@ -16,9 +16,5 @@ pub type ClearanceItemValidator = EntityValidator<ClearanceItem>;
 pub fn clearance_item_validator() -> ClearanceItemValidator {
     EntityValidator::new()
         .rule(RequiredString::new("title", |e: &ClearanceItem| &e.title))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

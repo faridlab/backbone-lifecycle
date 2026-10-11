@@ -18,8 +18,6 @@ pub mod onboarding_template_handler;
 pub mod onboarding_template_task_handler;
 pub mod promotion_handler;
 
-// <<< CUSTOM
-// END CUSTOM
 
 // Re-exports
 pub use clearance_item_handler::{create_clearance_item_routes, create_clearance_item_read_routes, create_clearance_item_write_routes};
@@ -34,8 +32,6 @@ pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboardi
 pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes};
 pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
 pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
-// <<< CUSTOM
-// END CUSTOM
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

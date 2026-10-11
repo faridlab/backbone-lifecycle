@@ -32,5 +32,3 @@ pub type OnboardingTaskService = GenericCrudService<
     OnboardingTaskRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

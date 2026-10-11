@@ -24,8 +24,6 @@ pub mod application;
 pub mod presentation;
 pub mod seeders;
 pub mod exports;
-// <<< CUSTOM MODULES
-// END CUSTOM
 
 // The module's extension (hand-written; ADR-0031).
 #[path = "lib.ext.rs"]
@@ -91,8 +89,6 @@ pub struct LifecycleModule {
     pub(crate) promotion_service: Arc<PromotionService>,
     /// The module's extension state (`lib.ext.rs`); its fields read through `Deref`.
     pub(crate) ext: ModuleExt,
-    // <<< CUSTOM FIELDS
-    // END CUSTOM
 }
 
 impl std::ops::Deref for LifecycleModule {
@@ -226,8 +222,6 @@ impl LifecycleModule {
             .merge(create_promotion_read_routes(self.promotion_service.clone()))
     }
 
-    // <<< CUSTOM METHODS
-    // END CUSTOM
 }
 
 /// Builder for LifecycleModule
@@ -235,8 +229,6 @@ pub struct LifecycleModuleBuilder {
     db_pool: Option<PgPool>,
     /// The builder's extension state (`lib.ext.rs`); its fields read through `Deref`.
     ext: ModuleBuilderExt,
-    // <<< CUSTOM BUILDER FIELDS
-    // END CUSTOM
 }
 
 impl std::ops::Deref for LifecycleModuleBuilder {
@@ -258,8 +250,6 @@ impl LifecycleModuleBuilder {
         Self {
             db_pool: None,
             ext: Default::default(),
-            // <<< CUSTOM BUILDER DEFAULTS
-            // END CUSTOM
         }
     }
 
@@ -269,8 +259,6 @@ impl LifecycleModuleBuilder {
         self
     }
 
-    // <<< CUSTOM - custom builder methods
-    // END CUSTOM
 
     /// Build the module with configured dependencies
     pub fn build(self) -> anyhow::Result<LifecycleModule> {
@@ -325,8 +313,6 @@ impl LifecycleModuleBuilder {
         let promotion_repository = Arc::new(PromotionRepository::new(db_pool.clone()));
         let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
 
-        // <<< CUSTOM
-        // END CUSTOM
 
         // The extension builds its own state from what the generated build made.
         let ext = self.ext.build(&ModuleParts {
@@ -371,8 +357,6 @@ impl LifecycleModuleBuilder {
             onboarding_template_task_service,
             promotion_service,
             ext,
-            // <<< CUSTOM
-            // END CUSTOM
         })
     }
 }

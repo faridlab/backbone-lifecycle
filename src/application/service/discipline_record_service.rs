@@ -32,5 +32,3 @@ pub type DisciplineRecordService = GenericCrudService<
     DisciplineRecordRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

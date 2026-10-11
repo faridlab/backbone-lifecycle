@@ -32,5 +32,3 @@ pub type OnboardingService = GenericCrudService<
     OnboardingRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

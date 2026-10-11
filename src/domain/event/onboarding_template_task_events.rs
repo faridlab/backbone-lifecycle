@@ -11,8 +11,6 @@ use crate::domain::entity::OnboardingTemplateTask;
 /// enum containing a `Crud(CrudEvent<OnboardingTemplateTask>)` variant.
 pub type OnboardingTemplateTaskEvent = CrudEvent<OnboardingTemplateTask>;
 
-// <<< CUSTOM
-// END CUSTOM
 
 use backbone_messaging::{CrudEventPublisher, NoOpCrudEventPublisher};
 use std::sync::Arc;

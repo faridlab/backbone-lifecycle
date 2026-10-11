@@ -257,7 +257,7 @@ impl backbone_core::ApplyUpdateDto<UpdateClearanceItemDto> for ClearanceItem {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to ClearanceItem here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

@@ -32,5 +32,3 @@ pub type FinalSettlementService = GenericCrudService<
     FinalSettlementRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

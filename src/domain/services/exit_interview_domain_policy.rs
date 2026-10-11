@@ -18,5 +18,3 @@ use crate::domain::entity::ExitInterview;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type ExitInterviewDomainPolicy = PermitAllPolicy<ExitInterview>;
 
-// <<< CUSTOM
-// END CUSTOM

@@ -18,5 +18,3 @@ use crate::domain::entity::Promotion;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type PromotionDomainPolicy = PermitAllPolicy<Promotion>;
 
-// <<< CUSTOM
-// END CUSTOM

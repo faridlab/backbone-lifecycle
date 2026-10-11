@@ -187,3 +187,4 @@ pub fn create_protected_onboarding_task_routes<A: AuthMiddleware + Send + Sync +
             }
         }))
 }
+

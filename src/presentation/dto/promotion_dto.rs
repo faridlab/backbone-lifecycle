@@ -404,7 +404,7 @@ impl backbone_core::ApplyUpdateDto<UpdatePromotionDto> for Promotion {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to Promotion here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

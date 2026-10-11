@@ -262,7 +262,7 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTemplateDto> for OnboardingTe
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to OnboardingTemplate here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

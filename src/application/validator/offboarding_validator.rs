@@ -14,10 +14,6 @@ pub type OffboardingValidator = EntityValidator<Offboarding>;
 /// Build a validator for Offboarding with all schema-defined field rules.
 pub fn offboarding_validator() -> OffboardingValidator {
     EntityValidator::new()
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
         // No schema-derived rules — add custom rules above.
 }
 
-// <<< CUSTOM
-// END CUSTOM

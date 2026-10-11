@@ -186,3 +186,4 @@ pub fn create_protected_onboarding_template_routes<A: AuthMiddleware + Send + Sy
             }
         }))
 }
+

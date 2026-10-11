@@ -11,8 +11,6 @@ use crate::domain::entity::FinalSettlement;
 /// enum containing a `Crud(CrudEvent<FinalSettlement>)` variant.
 pub type FinalSettlementEvent = CrudEvent<FinalSettlement>;
 
-// <<< CUSTOM
-// END CUSTOM
 
 use backbone_messaging::{CrudEventPublisher, NoOpCrudEventPublisher};
 use std::sync::Arc;

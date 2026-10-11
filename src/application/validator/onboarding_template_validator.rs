@@ -17,9 +17,5 @@ pub fn onboarding_template_validator() -> OnboardingTemplateValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &OnboardingTemplate| &e.name))
         .rule(OptionalNotBlank::new("description", |e: &OnboardingTemplate| e.description.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

@@ -280,7 +280,7 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTaskDto> for OnboardingTask {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to OnboardingTask here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

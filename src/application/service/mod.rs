@@ -20,8 +20,6 @@ pub mod onboarding_template_service;
 pub mod onboarding_template_task_service;
 pub mod promotion_service;
 
-// <<< CUSTOM
-// END CUSTOM
 
 pub use clearance_item_service::ClearanceItemService;
 pub use contract_service::ContractService;
@@ -35,8 +33,6 @@ pub use onboarding_task_service::OnboardingTaskService;
 pub use onboarding_template_service::OnboardingTemplateService;
 pub use onboarding_template_task_service::OnboardingTemplateTaskService;
 pub use promotion_service::PromotionService;
-// <<< CUSTOM
-// END CUSTOM
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

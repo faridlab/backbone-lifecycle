@@ -18,9 +18,5 @@ pub fn onboarding_template_task_validator() -> OnboardingTemplateTaskValidator {
         .rule(RequiredString::new("title", |e: &OnboardingTemplateTask| &e.title))
         .rule(OptionalNotBlank::new("category", |e: &OnboardingTemplateTask| e.category.as_deref()))
         .rule(OptionalNotBlank::new("owner_role", |e: &OnboardingTemplateTask| e.owner_role.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

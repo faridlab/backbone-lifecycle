@@ -464,7 +464,7 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to FinalSettlement here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

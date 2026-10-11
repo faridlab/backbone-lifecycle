@@ -16,9 +16,5 @@ pub type ContractValidator = EntityValidator<Contract>;
 pub fn contract_validator() -> ContractValidator {
     EntityValidator::new()
         .rule(OptionalNotBlank::new("contract_no", |e: &Contract| e.contract_no.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

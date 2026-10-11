@@ -32,5 +32,3 @@ pub type OffboardingService = GenericCrudService<
     OffboardingRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

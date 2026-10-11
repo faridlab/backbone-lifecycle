@@ -32,5 +32,3 @@ pub type PromotionService = GenericCrudService<
     PromotionRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

@@ -273,7 +273,7 @@ impl backbone_core::ApplyUpdateDto<UpdateOffboardingDto> for Offboarding {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to Offboarding here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

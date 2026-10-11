@@ -16,9 +16,5 @@ pub type OnboardingTaskValidator = EntityValidator<OnboardingTask>;
 pub fn onboarding_task_validator() -> OnboardingTaskValidator {
     EntityValidator::new()
         .rule(RequiredString::new("title", |e: &OnboardingTask| &e.title))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

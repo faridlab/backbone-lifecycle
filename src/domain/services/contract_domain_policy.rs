@@ -18,5 +18,3 @@ use crate::domain::entity::Contract;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type ContractDomainPolicy = PermitAllPolicy<Contract>;
 
-// <<< CUSTOM
-// END CUSTOM

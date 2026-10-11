@@ -363,3 +363,4 @@ pub fn create_contract_history_route(pool: sqlx::PgPool) -> axum::Router {
         .route("/contracts/:id/history", axum::routing::get(contract_history))
         .with_state(pool)
 }
+

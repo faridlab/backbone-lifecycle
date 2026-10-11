@@ -11,8 +11,6 @@ use crate::domain::entity::Offboarding;
 /// enum containing a `Crud(CrudEvent<Offboarding>)` variant.
 pub type OffboardingEvent = CrudEvent<Offboarding>;
 
-// <<< CUSTOM
-// END CUSTOM
 
 use backbone_messaging::{CrudEventPublisher, NoOpCrudEventPublisher};
 use std::sync::Arc;

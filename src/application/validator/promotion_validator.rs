@@ -16,9 +16,5 @@ pub type PromotionValidator = EntityValidator<Promotion>;
 pub fn promotion_validator() -> PromotionValidator {
     EntityValidator::new()
         .rule(OptionalNotBlank::new("reason", |e: &Promotion| e.reason.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

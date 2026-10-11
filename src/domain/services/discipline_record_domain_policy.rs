@@ -18,5 +18,3 @@ use crate::domain::entity::DisciplineRecord;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type DisciplineRecordDomainPolicy = PermitAllPolicy<DisciplineRecord>;
 
-// <<< CUSTOM
-// END CUSTOM

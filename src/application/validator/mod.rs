@@ -31,5 +31,3 @@ pub use onboarding_template_validator::{OnboardingTemplateValidator, onboarding_
 pub use onboarding_template_task_validator::{OnboardingTemplateTaskValidator, onboarding_template_task_validator};
 pub use promotion_validator::{PromotionValidator, promotion_validator};
 
-// <<< CUSTOM
-// END CUSTOM

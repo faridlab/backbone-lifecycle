@@ -18,5 +18,3 @@ use crate::domain::entity::ClearanceItem;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type ClearanceItemDomainPolicy = PermitAllPolicy<ClearanceItem>;
 
-// <<< CUSTOM
-// END CUSTOM

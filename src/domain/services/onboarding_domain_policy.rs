@@ -18,5 +18,3 @@ use crate::domain::entity::Onboarding;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type OnboardingDomainPolicy = PermitAllPolicy<Onboarding>;
 
-// <<< CUSTOM
-// END CUSTOM

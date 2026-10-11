@@ -52,5 +52,3 @@ pub use onboarding_template_task_event_handlers::OnboardingTemplateTaskEventHand
 pub use promotion_events::{PromotionEvent, PromotionEventPublisher, NoopPromotionEventPublisher};
 pub use promotion_event_handlers::PromotionEventHandler;
 
-// <<< CUSTOM
-// END CUSTOM

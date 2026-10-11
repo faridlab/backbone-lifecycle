@@ -128,6 +128,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add DisciplineRecord specific tests here
-// <<< CUSTOM TESTS END >>>

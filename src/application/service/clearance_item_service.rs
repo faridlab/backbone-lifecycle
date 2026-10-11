@@ -32,5 +32,3 @@ pub type ClearanceItemService = GenericCrudService<
     ClearanceItemRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

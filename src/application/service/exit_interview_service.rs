@@ -32,5 +32,3 @@ pub type ExitInterviewService = GenericCrudService<
     ExitInterviewRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

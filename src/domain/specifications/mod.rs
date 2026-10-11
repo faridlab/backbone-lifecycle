@@ -19,5 +19,3 @@ pub mod onboarding_template_specification;
 pub mod onboarding_template_task_specification;
 pub mod promotion_specification;
 
-// <<< CUSTOM
-// END CUSTOM

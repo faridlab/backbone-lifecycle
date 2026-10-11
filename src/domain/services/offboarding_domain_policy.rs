@@ -18,5 +18,3 @@ use crate::domain::entity::Offboarding;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type OffboardingDomainPolicy = PermitAllPolicy<Offboarding>;
 
-// <<< CUSTOM
-// END CUSTOM

@@ -14,10 +14,6 @@ pub type OnboardingValidator = EntityValidator<Onboarding>;
 /// Build a validator for Onboarding with all schema-defined field rules.
 pub fn onboarding_validator() -> OnboardingValidator {
     EntityValidator::new()
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
         // No schema-derived rules — add custom rules above.
 }
 
-// <<< CUSTOM
-// END CUSTOM

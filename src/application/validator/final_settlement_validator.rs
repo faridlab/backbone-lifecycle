@@ -17,9 +17,5 @@ pub fn final_settlement_validator() -> FinalSettlementValidator {
     EntityValidator::new()
         .rule(RequiredString::new("period", |e: &FinalSettlement| &e.period))
         .rule(OptionalNotBlank::new("legal_basis", |e: &FinalSettlement| e.legal_basis.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

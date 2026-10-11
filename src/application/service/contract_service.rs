@@ -32,5 +32,3 @@ pub type ContractService = GenericCrudService<
     ContractRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

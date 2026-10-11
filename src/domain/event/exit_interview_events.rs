@@ -11,8 +11,6 @@ use crate::domain::entity::ExitInterview;
 /// enum containing a `Crud(CrudEvent<ExitInterview>)` variant.
 pub type ExitInterviewEvent = CrudEvent<ExitInterview>;
 
-// <<< CUSTOM
-// END CUSTOM
 
 use backbone_messaging::{CrudEventPublisher, NoOpCrudEventPublisher};
 use std::sync::Arc;

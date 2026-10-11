@@ -17,9 +17,5 @@ pub fn contract_template_validator() -> ContractTemplateValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &ContractTemplate| &e.name))
         .rule(RequiredString::new("body_template", |e: &ContractTemplate| &e.body_template))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

@@ -363,3 +363,4 @@ pub fn create_discipline_record_history_route(pool: sqlx::PgPool) -> axum::Route
         .route("/discipline_records/:id/history", axum::routing::get(discipline_record_history))
         .with_state(pool)
 }
+

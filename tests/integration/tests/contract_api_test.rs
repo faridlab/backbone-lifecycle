@@ -122,6 +122,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add Contract specific tests here
-// <<< CUSTOM TESTS END >>>

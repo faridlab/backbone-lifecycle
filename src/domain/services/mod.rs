@@ -28,5 +28,3 @@ pub use onboarding_template_domain_policy::OnboardingTemplateDomainPolicy;
 pub use onboarding_template_task_domain_policy::OnboardingTemplateTaskDomainPolicy;
 pub use promotion_domain_policy::PromotionDomainPolicy;
 
-// <<< CUSTOM
-// END CUSTOM

@@ -18,5 +18,3 @@ use crate::domain::entity::FinalSettlement;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type FinalSettlementDomainPolicy = PermitAllPolicy<FinalSettlement>;
 
-// <<< CUSTOM
-// END CUSTOM

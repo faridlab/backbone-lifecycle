@@ -19,9 +19,5 @@ pub fn discipline_record_validator() -> DisciplineRecordValidator {
         .rule(RequiredString::new("description", |e: &DisciplineRecord| &e.description))
         .rule(OptionalNotBlank::new("acknowledged_via", |e: &DisciplineRecord| e.acknowledged_via.as_deref()))
         .rule(OptionalNotBlank::new("cancel_reason", |e: &DisciplineRecord| e.cancel_reason.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

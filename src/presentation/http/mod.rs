@@ -19,8 +19,6 @@ pub mod onboarding_template_task_handler;
 pub mod promotion_handler;
 
 // <<< CUSTOM
-// Guarded composition (read-only CRUD + validated write verbs) — the recommended mount.
-pub mod guarded_routes;
 // END CUSTOM
 
 // Re-exports
@@ -37,5 +35,7 @@ pub use onboarding_template_handler::{create_onboarding_template_routes, create_
 pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
 pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
 // <<< CUSTOM
-pub use guarded_routes::create_guarded_lifecycle_routes;
 // END CUSTOM
+
+// This directory's extension (hand-written; ADR-0031).
+include!("mod.ext.rs");

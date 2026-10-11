@@ -25,8 +25,17 @@ pub mod presentation;
 pub mod seeders;
 pub mod exports;
 // <<< CUSTOM MODULES
-pub mod request_pool;
 // END CUSTOM
+
+// The module's extension (hand-written; ADR-0031).
+#[path = "lib.ext.rs"]
+mod lib_ext;
+pub use lib_ext::*;
+/// This crate's module and builder under fixed names, for the extension's `impl` blocks.
+#[allow(dead_code)]
+pub(crate) type ThisModule = LifecycleModule;
+#[allow(dead_code)]
+pub(crate) type ThisModuleBuilder = LifecycleModuleBuilder;
 
 // Re-exports for convenience - Domain entities
 pub use domain::entity::*;
@@ -80,29 +89,53 @@ pub struct LifecycleModule {
     pub(crate) onboarding_template_service: Arc<OnboardingTemplateService>,
     pub(crate) onboarding_template_task_service: Arc<OnboardingTemplateTaskService>,
     pub(crate) promotion_service: Arc<PromotionService>,
+    /// The module's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    pub(crate) ext: ModuleExt,
     // <<< CUSTOM FIELDS
-    /// The three career-lifecycle write-services (ADR-005 producers): each flips a workflow status
-    /// and stages the matching compound event in one tx. Public so the composer / tests can drive
-    /// them (`module.promotion_write_service.effect(id)`, etc.).
-    pub promotion_write_service: Arc<application::service::PromotionWriteService>,
-    pub onboarding_write_service: Arc<application::service::OnboardingWriteService>,
-    pub offboarding_write_service: Arc<application::service::OffboardingWriteService>,
-    /// Checkpoint create verbs (onboarding tasks / clearance items) with the optional
-    /// notify side effect through the activity port. Public so the composer / tests can
-    /// drive them directly.
-    pub onboarding_task_write_service: Arc<application::service::OnboardingTaskWriteService>,
-    pub clearance_item_write_service: Arc<application::service::ClearanceItemWriteService>,
-    /// Final-settlement draft + GL confirmation. Drafts from the same pesangon inputs as
-    /// the close verb; confirm posts through the GL port and stamps only after the ack.
-    pub final_settlement_write_service: Arc<application::service::FinalSettlementWriteService>,
-    /// Discipline records (SP1-SP3): issue/acknowledge/contest/cancel with the
-    /// derived-expiry predicate. The contest approvals port and the issued
-    /// event sink are unwired by default (fail-closed / log-only).
-    pub discipline_write_service: Arc<application::service::DisciplineWriteService>,
-    /// Employment contracts: create, the decision verb (through the
-    /// approvals port), the dispatcher arms, the reminder tick.
-    pub contract_write_service: Arc<application::service::ContractWriteService>,
     // END CUSTOM
+}
+
+impl std::ops::Deref for LifecycleModule {
+    type Target = ModuleExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for LifecycleModule {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
+}
+
+/// What the extension's `build` hook receives from the generated build (ADR-0031).
+#[allow(dead_code)]
+pub(crate) struct ModuleParts<'a> {
+    pub(crate) db_pool: &'a PgPool,
+    pub(crate) clearance_item_service: &'a Arc<ClearanceItemService>,
+    pub(crate) clearance_item_repository: &'a Arc<ClearanceItemRepository>,
+    pub(crate) contract_service: &'a Arc<ContractService>,
+    pub(crate) contract_repository: &'a Arc<ContractRepository>,
+    pub(crate) contract_template_service: &'a Arc<ContractTemplateService>,
+    pub(crate) contract_template_repository: &'a Arc<ContractTemplateRepository>,
+    pub(crate) discipline_record_service: &'a Arc<DisciplineRecordService>,
+    pub(crate) discipline_record_repository: &'a Arc<DisciplineRecordRepository>,
+    pub(crate) exit_interview_service: &'a Arc<ExitInterviewService>,
+    pub(crate) exit_interview_repository: &'a Arc<ExitInterviewRepository>,
+    pub(crate) final_settlement_service: &'a Arc<FinalSettlementService>,
+    pub(crate) final_settlement_repository: &'a Arc<FinalSettlementRepository>,
+    pub(crate) offboarding_service: &'a Arc<OffboardingService>,
+    pub(crate) offboarding_repository: &'a Arc<OffboardingRepository>,
+    pub(crate) onboarding_service: &'a Arc<OnboardingService>,
+    pub(crate) onboarding_repository: &'a Arc<OnboardingRepository>,
+    pub(crate) onboarding_task_service: &'a Arc<OnboardingTaskService>,
+    pub(crate) onboarding_task_repository: &'a Arc<OnboardingTaskRepository>,
+    pub(crate) onboarding_template_service: &'a Arc<OnboardingTemplateService>,
+    pub(crate) onboarding_template_repository: &'a Arc<OnboardingTemplateRepository>,
+    pub(crate) onboarding_template_task_service: &'a Arc<OnboardingTemplateTaskService>,
+    pub(crate) onboarding_template_task_repository: &'a Arc<OnboardingTemplateTaskRepository>,
+    pub(crate) promotion_service: &'a Arc<PromotionService>,
+    pub(crate) promotion_repository: &'a Arc<PromotionRepository>,
 }
 
 impl LifecycleModule {
@@ -194,33 +227,29 @@ impl LifecycleModule {
     }
 
     // <<< CUSTOM METHODS
-    /// The guarded surface: read-only CRUD for every entity + the validated write verbs
-    /// (workflow transitions, checkpoint creates, settlement draft/confirm), each gated on the
-    /// org context the composing service's org auth layer inserts (the acting identity comes off
-    /// the signed token; the database scope is the one the host bound). This is the production
-    /// mount — generic mutation never reaches it.
-    pub fn guarded_routes(&self) -> Router {
-        presentation::http::create_guarded_lifecycle_routes(self)
-    }
     // END CUSTOM
 }
 
 /// Builder for LifecycleModule
 pub struct LifecycleModuleBuilder {
     db_pool: Option<PgPool>,
+    /// The builder's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    ext: ModuleBuilderExt,
     // <<< CUSTOM BUILDER FIELDS
-    // ADR-005 offboarding producer: optional override for the settlement input port. When unset,
-    // build() falls back to a pool-backed OffboardingInputs — so the composer's
-    // `with_database(pool).build()` keeps working unchanged. The statutory severance numbers are
-    // not configurable here: they are effective-dated rows in the lifecycle.severance_* tables.
-    offboarding_inputs: Option<Arc<dyn application::service::OffboardingInputs>>,
-    // Outbound seams, unwired by default: the activity port (checkpoint notifies) and the GL
-    // posting port (settlement confirmation). The host app supplies the real adapters at
-    // composition time; the unwired defaults fail loudly (422) on any explicit side-effect
-    // request rather than silently skipping it.
-    activity_sink: Option<Arc<dyn application::service::ActivitySink>>,
-    gl_sink: Option<Arc<dyn backbone_gl_posting::GlPostSink>>,
     // END CUSTOM
+}
+
+impl std::ops::Deref for LifecycleModuleBuilder {
+    type Target = ModuleBuilderExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for LifecycleModuleBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
 }
 
 impl LifecycleModuleBuilder {
@@ -228,10 +257,8 @@ impl LifecycleModuleBuilder {
     pub fn new() -> Self {
         Self {
             db_pool: None,
+            ext: Default::default(),
             // <<< CUSTOM BUILDER DEFAULTS
-            offboarding_inputs: None,
-            activity_sink: None,
-            gl_sink: None,
             // END CUSTOM
         }
     }
@@ -243,29 +270,6 @@ impl LifecycleModuleBuilder {
     }
 
     // <<< CUSTOM - custom builder methods
-    /// Override the cross-module read port the offboarding producer uses to gather the settlement
-    /// inputs (join_date / current salary / unused annual leave). Defaults to a pool-backed impl that
-    /// reads `employee.employments` / `payroll.compensation_changes` / `timeoff.timeoff_balances`
-    /// directly — only override if you need a different read source.
-    pub fn with_offboarding_inputs(mut self, inputs: Arc<dyn application::service::OffboardingInputs>) -> Self {
-        self.offboarding_inputs = Some(inputs);
-        self
-    }
-
-    /// Wire the activity port (checkpoint notifies). Unwired by default: a create that
-    /// explicitly asks to notify fails closed with 422 `activity_seam_unwired` instead of
-    /// silently skipping the notification.
-    pub fn with_activity_sink(mut self, sink: Arc<dyn application::service::ActivitySink>) -> Self {
-        self.activity_sink = Some(sink);
-        self
-    }
-
-    /// Wire the GL posting port (settlement confirmation). Unwired by default: confirm fails
-    /// loudly with 422 `gl_seam_unwired` and the settlement stays draft and retryable.
-    pub fn with_gl_sink(mut self, sink: Arc<dyn backbone_gl_posting::GlPostSink>) -> Self {
-        self.gl_sink = Some(sink);
-        self
-    }
     // END CUSTOM
 
     /// Build the module with configured dependencies
@@ -322,50 +326,36 @@ impl LifecycleModuleBuilder {
         let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
 
         // <<< CUSTOM
-        // ADR-005 producers: bound to the same pool as the repos. Each verb opens its own tx around
-        // the state change + the outbox stage; no shared mutable state, so an Arc is purely for cheap reuse.
-        let promotion_write_service = Arc::new(application::service::PromotionWriteService::new(db_pool.clone()));
-        let onboarding_write_service = Arc::new(application::service::OnboardingWriteService::new(db_pool.clone()));
-        // The offboarding producer also computes the settlement, so it needs the cross-module
-        // inputs port. Fall back to pool-backed inputs when the builder didn't override it.
-        let offboarding_inputs = self.offboarding_inputs.unwrap_or_else(|| {
-            Arc::new(application::service::PoolOffboardingInputs::new(db_pool.clone()))
-        });
-        let offboarding_write_service = Arc::new(application::service::OffboardingWriteService::new(
-            db_pool.clone(),
-            offboarding_inputs.clone(),
-        ));
-        // The settlement drafts through the SAME computation the close verb uses, so the row
-        // agrees with the offboarding.closed event payload. Seams default to the
-        // unwired sinks (loud 422 on explicit side-effect requests) until the host wires them.
-        let gl_sink = self.gl_sink.unwrap_or_else(|| {
-            Arc::new(application::service::UnwiredGlSink)
-        });
-        let final_settlement_write_service =
-            Arc::new(application::service::FinalSettlementWriteService::new(
-                db_pool.clone(),
-                offboarding_inputs,
-                gl_sink,
-            ));
-        // Checkpoint create verbs share the activity port (unwired by default).
-        let activity_sink = self.activity_sink.unwrap_or_else(|| {
-            Arc::new(application::service::UnwiredActivitySink)
-        });
-        let onboarding_task_write_service =
-            Arc::new(application::service::OnboardingTaskWriteService::new(
-                db_pool.clone(),
-                activity_sink.clone(),
-            ));
-        let clearance_item_write_service =
-            Arc::new(application::service::ClearanceItemWriteService::new(
-                db_pool.clone(),
-                activity_sink,
-            ));
-        let discipline_write_service =
-            Arc::new(application::service::DisciplineWriteService::new(db_pool.clone()));
-        let contract_write_service =
-            Arc::new(application::service::ContractWriteService::new(db_pool.clone()));
         // END CUSTOM
+
+        // The extension builds its own state from what the generated build made.
+        let ext = self.ext.build(&ModuleParts {
+            db_pool: &db_pool,
+            clearance_item_service: &clearance_item_service,
+            clearance_item_repository: &clearance_item_repository,
+            contract_service: &contract_service,
+            contract_repository: &contract_repository,
+            contract_template_service: &contract_template_service,
+            contract_template_repository: &contract_template_repository,
+            discipline_record_service: &discipline_record_service,
+            discipline_record_repository: &discipline_record_repository,
+            exit_interview_service: &exit_interview_service,
+            exit_interview_repository: &exit_interview_repository,
+            final_settlement_service: &final_settlement_service,
+            final_settlement_repository: &final_settlement_repository,
+            offboarding_service: &offboarding_service,
+            offboarding_repository: &offboarding_repository,
+            onboarding_service: &onboarding_service,
+            onboarding_repository: &onboarding_repository,
+            onboarding_task_service: &onboarding_task_service,
+            onboarding_task_repository: &onboarding_task_repository,
+            onboarding_template_service: &onboarding_template_service,
+            onboarding_template_repository: &onboarding_template_repository,
+            onboarding_template_task_service: &onboarding_template_task_service,
+            onboarding_template_task_repository: &onboarding_template_task_repository,
+            promotion_service: &promotion_service,
+            promotion_repository: &promotion_repository,
+        })?;
 
         Ok(LifecycleModule {
             clearance_item_service,
@@ -380,15 +370,8 @@ impl LifecycleModuleBuilder {
             onboarding_template_service,
             onboarding_template_task_service,
             promotion_service,
+            ext,
             // <<< CUSTOM
-            promotion_write_service,
-            onboarding_write_service,
-            offboarding_write_service,
-            onboarding_task_write_service,
-            clearance_item_write_service,
-            final_settlement_write_service,
-            discipline_write_service,
-            contract_write_service,
             // END CUSTOM
         })
     }
@@ -399,3 +382,6 @@ impl Default for LifecycleModuleBuilder {
         Self::new()
     }
 }
+
+// This directory's extension (hand-written; ADR-0031).
+include!("mod.ext.rs");

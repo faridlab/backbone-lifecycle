@@ -1,0 +1,74 @@
+// This directory's extension (hand-written; ADR-0031). The generated mod.rs (lib.rs for
+// src/) pulls it in with include!, so its lines resolve against this directory.
+
+pub mod pesangon;
+// The one assembly of a leaver's settlement (inputs + statutory set + settings + calc), shared by
+// the close verb and the settlement draft so the event and the row agree.
+pub mod settlement_computation;
+// ADR-005 producers: the three career-lifecycle compound events. Each stages an outbox row in-tx
+// with its state change (approved→effective / in_progress→completed / cleared→closed). User-owned
+// custom files — never regenerated.
+pub mod promotion_write_service;
+pub mod promotion_approvals_port;
+pub mod onboarding_write_service;
+pub mod offboarding_write_service;
+// The cross-module read ports the offboarding producer needs to compute the settlement at close
+// time (join_date / current salary / unused annual leave). Trait seam + pool-backed default impl.
+pub mod offboarding_ports;
+// Outbound activity-scheduling port: put a mail activity on a checkpoint owner's plate without a
+// Cargo edge into the mail domain. The host app wires the adapter; the unwired default fails
+// closed on any explicit notify request.
+pub mod activity_port;
+// Checkpoint create verbs (onboarding tasks / clearance items) with the optional notify side
+// effect — fail-closed pre-check, insert, commit, schedule after commit.
+pub mod checkpoint_write_service;
+// Final-settlement draft (idempotent, one per offboarding) + GL confirmation through the shared
+// backbone-gl-posting port (stamp only after accounting acks; unwired default = loud 422).
+pub mod final_settlement_write_service;
+// Discipline records (SP1-SP3): valid on service, expiry derived, the
+// employee's contest through the optional approvals port.
+pub mod discipline_write_service;
+pub mod discipline_events;
+// Employment contracts (PKWT/PKWTT): the decision verb through the approvals
+// port, the reminder tick, and the expiry events.
+pub mod contract_write_service;
+pub mod contract_events;
+// The exit-started and task-assigned events (#558's remaining arms).
+pub mod lifecycle_events;
+pub use pesangon::{
+    compute_settlement, last_pay, severance_basis, tenure_years, LastPay, PesangonError,
+    ReasonParams, SettlementBreakdown, SettlementInputs, SeveranceBasis, SeveranceParams,
+    SeveranceSettings, TenureBand, WorkWeek, SEVERANCE_COUNTRY,
+};
+pub use settlement_computation::{compute_for_offboarding, SettlementComputeError};
+pub use promotion_write_service::{
+    PromotionValidationPort,
+    NewPromotion, PromotionEffectError, PromotionWriteService, PROMOTION_EFFECTIVE_EVENT_TYPE,
+};
+pub use onboarding_write_service::{
+    NewOnboarding, OnboardingCompleteError, OnboardingWriteService, ONBOARDING_COMPLETED_EVENT_TYPE,
+    PROBATION_CONFIRMED_EVENT_TYPE,
+};
+pub use offboarding_write_service::{
+    NewOffboarding, OffboardingCloseError, OffboardingWriteService, OFFBOARDING_CLOSED_EVENT_TYPE,
+};
+pub use offboarding_ports::{OffboardingInputs, PoolOffboardingInputs};
+pub use activity_port::{ActivityAck, ActivityCommand, ActivityRejected, ActivitySink, UnwiredActivitySink};
+pub use checkpoint_write_service::{
+    ClearanceItemWriteService, CheckpointError, NewClearanceItem, NewOnboardingTask,
+    OnboardingTaskWriteService,
+};
+pub use final_settlement_write_service::{
+    FinalSettlementError, FinalSettlementWriteService, SettlementAccounts, UnwiredGlSink,
+};
+pub use discipline_write_service::{
+    ContestFiling, DisciplineApprovalsPort, DisciplineError, DisciplineWriteService,
+    NewDisciplineRecord, ACTIVE_PREDICATE,
+};
+pub use discipline_events::{DisciplineEvent, DisciplineEventSink, LoggingSink as DisciplineLoggingSink};
+pub use contract_write_service::{
+    ContractApprovalsPort, ContractDecision, ContractDecisionFiling, ContractError,
+    ContractWriteService, NewContract, PKWT_CAP_MONTHS,
+};
+pub use contract_events::{ContractEvent, ContractEventSink, LoggingSink as ContractLoggingSink};
+pub use lifecycle_events::{LifecycleEvent, LifecycleEventSink, LoggingSink as LifecycleLoggingSink};

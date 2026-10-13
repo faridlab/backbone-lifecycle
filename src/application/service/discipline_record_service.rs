@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<DisciplineRecord> for DisciplineReco
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `employee_id_required` (@required on DisciplineRecord.employee_id)
         if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
@@ -68,7 +68,7 @@ impl backbone_core::write_guard::WriteGuard<DisciplineRecord> for DisciplineReco
         }
         // `offense_max_length` (@length(max=200) on DisciplineRecord.offense)
         if (create || (update && r::changed(old.as_ref(), row, &["offense"]))) && !r::holds(&r::le(r::length(r::field(row, "offense")), r::Val::Num(200.0_f64))) {
-            shadow.push(Violation::new("offense", "max_length", "offense must be at most 200 characters").with_param("max", 200_i64));
+            refuse.push(Violation::new("offense", "max_length", "offense must be at most 200 characters").with_param("max", 200_i64));
         }
         // `description_required` (@required on DisciplineRecord.description)
         if (create || (update && r::changed(old.as_ref(), row, &["description"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "description")), r::not(r::is_empty(r::trim(r::field(row, "description")))))) {
@@ -76,15 +76,15 @@ impl backbone_core::write_guard::WriteGuard<DisciplineRecord> for DisciplineReco
         }
         // `description_max_length` (@length(max=4000) on DisciplineRecord.description)
         if (create || (update && r::changed(old.as_ref(), row, &["description"]))) && !r::holds(&r::le(r::length(r::field(row, "description")), r::Val::Num(4000.0_f64))) {
-            shadow.push(Violation::new("description", "max_length", "description must be at most 4000 characters").with_param("max", 4000_i64));
+            refuse.push(Violation::new("description", "max_length", "description must be at most 4000 characters").with_param("max", 4000_i64));
         }
         // `acknowledged_via_max_length` (@length(max=40) on DisciplineRecord.acknowledged_via)
         if (create || (update && r::changed(old.as_ref(), row, &["acknowledged_via"]))) && !r::holds(&r::le(r::length(r::field(row, "acknowledged_via")), r::Val::Num(40.0_f64))) {
-            shadow.push(Violation::new("acknowledged_via", "max_length", "acknowledged_via must be at most 40 characters").with_param("max", 40_i64));
+            refuse.push(Violation::new("acknowledged_via", "max_length", "acknowledged_via must be at most 40 characters").with_param("max", 40_i64));
         }
         // `cancel_reason_max_length` (@length(max=1000) on DisciplineRecord.cancel_reason)
         if (create || (update && r::changed(old.as_ref(), row, &["cancel_reason"]))) && !r::holds(&r::le(r::length(r::field(row, "cancel_reason")), r::Val::Num(1000.0_f64))) {
-            shadow.push(Violation::new("cancel_reason", "max_length", "cancel_reason must be at most 1000 characters").with_param("max", 1000_i64));
+            refuse.push(Violation::new("cancel_reason", "max_length", "cancel_reason must be at most 1000 characters").with_param("max", 1000_i64));
         }
         GuardOutcome { refuse, shadow }
     }

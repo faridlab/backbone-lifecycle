@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<Promotion> for PromotionRowRules {
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `employee_id_required` (@required on Promotion.employee_id)
         if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
@@ -64,11 +64,11 @@ impl backbone_core::write_guard::WriteGuard<Promotion> for PromotionRowRules {
         }
         // `proposed_salary_non_negative` (@non_negative on Promotion.proposed_salary)
         if (create || (update && r::changed(old.as_ref(), row, &["proposed_salary"]))) && !r::holds(&r::ge(r::field(row, "proposed_salary"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("proposed_salary", "non_negative", "proposed_salary must not be negative"));
+            refuse.push(Violation::new("proposed_salary", "non_negative", "proposed_salary must not be negative"));
         }
         // `reason_max_length` (@length(max=2000) on Promotion.reason)
         if (create || (update && r::changed(old.as_ref(), row, &["reason"]))) && !r::holds(&r::le(r::length(r::field(row, "reason")), r::Val::Num(2000.0_f64))) {
-            shadow.push(Violation::new("reason", "max_length", "reason must be at most 2000 characters").with_param("max", 2000_i64));
+            refuse.push(Violation::new("reason", "max_length", "reason must be at most 2000 characters").with_param("max", 2000_i64));
         }
         GuardOutcome { refuse, shadow }
     }

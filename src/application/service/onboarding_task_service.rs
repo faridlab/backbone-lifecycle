@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<OnboardingTask> for OnboardingTaskRo
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `onboarding_id_required` (@required on OnboardingTask.onboarding_id)
         if (create || (update && r::changed(old.as_ref(), row, &["onboarding_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "onboarding_id")), r::not(r::is_empty(r::trim(r::field(row, "onboarding_id")))))) {
@@ -68,7 +68,7 @@ impl backbone_core::write_guard::WriteGuard<OnboardingTask> for OnboardingTaskRo
         }
         // `title_max_length` (@length(max=255) on OnboardingTask.title)
         if (create || (update && r::changed(old.as_ref(), row, &["title"]))) && !r::holds(&r::le(r::length(r::field(row, "title")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("title", "max_length", "title must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("title", "max_length", "title must be at most 255 characters").with_param("max", 255_i64));
         }
         GuardOutcome { refuse, shadow }
     }

@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<Contract> for ContractRowRules {
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `employment_id_required` (@required on Contract.employment_id)
         if (create || (update && r::changed(old.as_ref(), row, &["employment_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employment_id")), r::not(r::is_empty(r::trim(r::field(row, "employment_id")))))) {
@@ -68,7 +68,7 @@ impl backbone_core::write_guard::WriteGuard<Contract> for ContractRowRules {
         }
         // `contract_no_max_length` (@length(max=60) on Contract.contract_no)
         if (create || (update && r::changed(old.as_ref(), row, &["contract_no"]))) && !r::holds(&r::le(r::length(r::field(row, "contract_no")), r::Val::Num(60.0_f64))) {
-            shadow.push(Violation::new("contract_no", "max_length", "contract_no must be at most 60 characters").with_param("max", 60_i64));
+            refuse.push(Violation::new("contract_no", "max_length", "contract_no must be at most 60 characters").with_param("max", 60_i64));
         }
         GuardOutcome { refuse, shadow }
     }

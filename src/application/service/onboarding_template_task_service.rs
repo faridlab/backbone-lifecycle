@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<OnboardingTemplateTask> for Onboardi
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `template_id_required` (@required on OnboardingTemplateTask.template_id)
         if (create || (update && r::changed(old.as_ref(), row, &["template_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "template_id")), r::not(r::is_empty(r::trim(r::field(row, "template_id")))))) {
@@ -68,15 +68,15 @@ impl backbone_core::write_guard::WriteGuard<OnboardingTemplateTask> for Onboardi
         }
         // `title_max_length` (@length(max=255) on OnboardingTemplateTask.title)
         if (create || (update && r::changed(old.as_ref(), row, &["title"]))) && !r::holds(&r::le(r::length(r::field(row, "title")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("title", "max_length", "title must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("title", "max_length", "title must be at most 255 characters").with_param("max", 255_i64));
         }
         // `category_max_length` (@length(max=40) on OnboardingTemplateTask.category)
         if (create || (update && r::changed(old.as_ref(), row, &["category"]))) && !r::holds(&r::le(r::length(r::field(row, "category")), r::Val::Num(40.0_f64))) {
-            shadow.push(Violation::new("category", "max_length", "category must be at most 40 characters").with_param("max", 40_i64));
+            refuse.push(Violation::new("category", "max_length", "category must be at most 40 characters").with_param("max", 40_i64));
         }
         // `owner_role_max_length` (@length(max=60) on OnboardingTemplateTask.owner_role)
         if (create || (update && r::changed(old.as_ref(), row, &["owner_role"]))) && !r::holds(&r::le(r::length(r::field(row, "owner_role")), r::Val::Num(60.0_f64))) {
-            shadow.push(Violation::new("owner_role", "max_length", "owner_role must be at most 60 characters").with_param("max", 60_i64));
+            refuse.push(Violation::new("owner_role", "max_length", "owner_role must be at most 60 characters").with_param("max", 60_i64));
         }
         GuardOutcome { refuse, shadow }
     }

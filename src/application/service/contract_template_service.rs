@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<ContractTemplate> for ContractTempla
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `name_required` (@required on ContractTemplate.name)
         if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "name")), r::not(r::is_empty(r::trim(r::field(row, "name")))))) {
@@ -64,7 +64,7 @@ impl backbone_core::write_guard::WriteGuard<ContractTemplate> for ContractTempla
         }
         // `name_max_length` (@length(max=150) on ContractTemplate.name)
         if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::le(r::length(r::field(row, "name")), r::Val::Num(150.0_f64))) {
-            shadow.push(Violation::new("name", "max_length", "name must be at most 150 characters").with_param("max", 150_i64));
+            refuse.push(Violation::new("name", "max_length", "name must be at most 150 characters").with_param("max", 150_i64));
         }
         // `body_template_required` (@required on ContractTemplate.body_template)
         if (create || (update && r::changed(old.as_ref(), row, &["body_template"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "body_template")), r::not(r::is_empty(r::trim(r::field(row, "body_template")))))) {
@@ -72,7 +72,7 @@ impl backbone_core::write_guard::WriteGuard<ContractTemplate> for ContractTempla
         }
         // `body_template_max_length` (@length(max=20000) on ContractTemplate.body_template)
         if (create || (update && r::changed(old.as_ref(), row, &["body_template"]))) && !r::holds(&r::le(r::length(r::field(row, "body_template")), r::Val::Num(20000.0_f64))) {
-            shadow.push(Violation::new("body_template", "max_length", "body_template must be at most 20000 characters").with_param("max", 20000_i64));
+            refuse.push(Violation::new("body_template", "max_length", "body_template must be at most 20000 characters").with_param("max", 20000_i64));
         }
         GuardOutcome { refuse, shadow }
     }

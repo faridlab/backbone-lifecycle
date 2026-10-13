@@ -32,3 +32,89 @@ pub type FinalSettlementService = GenericCrudService<
     FinalSettlementRepository,
 >;
 
+/// The rules the schema declares for FinalSettlement, checked against the row a create or update
+/// would store. The generated build attaches it to [`FinalSettlementService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct FinalSettlementRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<FinalSettlement> for FinalSettlementRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, FinalSettlement>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `employee_id_required` (@required on FinalSettlement.employee_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
+            refuse.push(Violation::new("employee_id", "required", "employee_id is required"));
+        }
+        // `offboarding_id_required` (@required on FinalSettlement.offboarding_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["offboarding_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "offboarding_id")), r::not(r::is_empty(r::trim(r::field(row, "offboarding_id")))))) {
+            refuse.push(Violation::new("offboarding_id", "required", "offboarding_id is required"));
+        }
+        // `period_required` (@required on FinalSettlement.period)
+        if (create || (update && r::changed(old.as_ref(), row, &["period"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "period")), r::not(r::is_empty(r::trim(r::field(row, "period")))))) {
+            refuse.push(Violation::new("period", "required", "period is required"));
+        }
+        // `period_max_length` (@length(max=20) on FinalSettlement.period)
+        if (create || (update && r::changed(old.as_ref(), row, &["period"]))) && !r::holds(&r::le(r::length(r::field(row, "period")), r::Val::Num(20.0_f64))) {
+            shadow.push(Violation::new("period", "max_length", "period must be at most 20 characters").with_param("max", 20_i64));
+        }
+        // `base_pay_non_negative` (@non_negative on FinalSettlement.base_pay)
+        if (create || (update && r::changed(old.as_ref(), row, &["base_pay"]))) && !r::holds(&r::ge(r::field(row, "base_pay"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("base_pay", "non_negative", "base_pay must not be negative"));
+        }
+        // `unused_leave_payout_non_negative` (@non_negative on FinalSettlement.unused_leave_payout)
+        if (create || (update && r::changed(old.as_ref(), row, &["unused_leave_payout"]))) && !r::holds(&r::ge(r::field(row, "unused_leave_payout"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("unused_leave_payout", "non_negative", "unused_leave_payout must not be negative"));
+        }
+        // `pesangon_amount_non_negative` (@non_negative on FinalSettlement.pesangon_amount)
+        if (create || (update && r::changed(old.as_ref(), row, &["pesangon_amount"]))) && !r::holds(&r::ge(r::field(row, "pesangon_amount"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("pesangon_amount", "non_negative", "pesangon_amount must not be negative"));
+        }
+        // `uang_pesangon_non_negative` (@non_negative on FinalSettlement.uang_pesangon)
+        if (create || (update && r::changed(old.as_ref(), row, &["uang_pesangon"]))) && !r::holds(&r::ge(r::field(row, "uang_pesangon"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("uang_pesangon", "non_negative", "uang_pesangon must not be negative"));
+        }
+        // `upmk_non_negative` (@non_negative on FinalSettlement.upmk)
+        if (create || (update && r::changed(old.as_ref(), row, &["upmk"]))) && !r::holds(&r::ge(r::field(row, "upmk"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("upmk", "non_negative", "upmk must not be negative"));
+        }
+        // `uang_pisah_non_negative` (@non_negative on FinalSettlement.uang_pisah)
+        if (create || (update && r::changed(old.as_ref(), row, &["uang_pisah"]))) && !r::holds(&r::ge(r::field(row, "uang_pisah"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("uang_pisah", "non_negative", "uang_pisah must not be negative"));
+        }
+        // `monthly_wage_non_negative` (@non_negative on FinalSettlement.monthly_wage)
+        if (create || (update && r::changed(old.as_ref(), row, &["monthly_wage"]))) && !r::holds(&r::ge(r::field(row, "monthly_wage"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("monthly_wage", "non_negative", "monthly_wage must not be negative"));
+        }
+        // `daily_wage_non_negative` (@non_negative on FinalSettlement.daily_wage)
+        if (create || (update && r::changed(old.as_ref(), row, &["daily_wage"]))) && !r::holds(&r::ge(r::field(row, "daily_wage"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("daily_wage", "non_negative", "daily_wage must not be negative"));
+        }
+        // `legal_basis_max_length` (@length(max=120) on FinalSettlement.legal_basis)
+        if (create || (update && r::changed(old.as_ref(), row, &["legal_basis"]))) && !r::holds(&r::le(r::length(r::field(row, "legal_basis")), r::Val::Num(120.0_f64))) {
+            shadow.push(Violation::new("legal_basis", "max_length", "legal_basis must be at most 120 characters").with_param("max", 120_i64));
+        }
+        // `tax_deduction_non_negative` (@non_negative on FinalSettlement.tax_deduction)
+        if (create || (update && r::changed(old.as_ref(), row, &["tax_deduction"]))) && !r::holds(&r::ge(r::field(row, "tax_deduction"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("tax_deduction", "non_negative", "tax_deduction must not be negative"));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

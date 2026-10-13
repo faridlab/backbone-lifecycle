@@ -33,6 +33,18 @@ pub use onboarding_task_service::OnboardingTaskService;
 pub use onboarding_template_service::OnboardingTemplateService;
 pub use onboarding_template_task_service::OnboardingTemplateTaskService;
 pub use promotion_service::PromotionService;
+pub use clearance_item_service::ClearanceItemRowRules;
+pub use contract_service::ContractRowRules;
+pub use contract_template_service::ContractTemplateRowRules;
+pub use discipline_record_service::DisciplineRecordRowRules;
+pub use exit_interview_service::ExitInterviewRowRules;
+pub use final_settlement_service::FinalSettlementRowRules;
+pub use offboarding_service::OffboardingRowRules;
+pub use onboarding_service::OnboardingRowRules;
+pub use onboarding_task_service::OnboardingTaskRowRules;
+pub use onboarding_template_service::OnboardingTemplateRowRules;
+pub use onboarding_template_task_service::OnboardingTemplateTaskRowRules;
+pub use promotion_service::PromotionRowRules;
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

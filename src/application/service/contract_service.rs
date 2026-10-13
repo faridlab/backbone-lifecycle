@@ -32,3 +32,45 @@ pub type ContractService = GenericCrudService<
     ContractRepository,
 >;
 
+/// The rules the schema declares for Contract, checked against the row a create or update
+/// would store. The generated build attaches it to [`ContractService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct ContractRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<Contract> for ContractRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, Contract>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `employment_id_required` (@required on Contract.employment_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["employment_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employment_id")), r::not(r::is_empty(r::trim(r::field(row, "employment_id")))))) {
+            refuse.push(Violation::new("employment_id", "required", "employment_id is required"));
+        }
+        // `employee_id_required` (@required on Contract.employee_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
+            refuse.push(Violation::new("employee_id", "required", "employee_id is required"));
+        }
+        // `contract_no_max_length` (@length(max=60) on Contract.contract_no)
+        if (create || (update && r::changed(old.as_ref(), row, &["contract_no"]))) && !r::holds(&r::le(r::length(r::field(row, "contract_no")), r::Val::Num(60.0_f64))) {
+            shadow.push(Violation::new("contract_no", "max_length", "contract_no must be at most 60 characters").with_param("max", 60_i64));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

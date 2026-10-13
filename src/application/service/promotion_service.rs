@@ -32,3 +32,45 @@ pub type PromotionService = GenericCrudService<
     PromotionRepository,
 >;
 
+/// The rules the schema declares for Promotion, checked against the row a create or update
+/// would store. The generated build attaches it to [`PromotionService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct PromotionRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<Promotion> for PromotionRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, Promotion>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `employee_id_required` (@required on Promotion.employee_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
+            refuse.push(Violation::new("employee_id", "required", "employee_id is required"));
+        }
+        // `proposed_salary_non_negative` (@non_negative on Promotion.proposed_salary)
+        if (create || (update && r::changed(old.as_ref(), row, &["proposed_salary"]))) && !r::holds(&r::ge(r::field(row, "proposed_salary"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("proposed_salary", "non_negative", "proposed_salary must not be negative"));
+        }
+        // `reason_max_length` (@length(max=2000) on Promotion.reason)
+        if (create || (update && r::changed(old.as_ref(), row, &["reason"]))) && !r::holds(&r::le(r::length(r::field(row, "reason")), r::Val::Num(2000.0_f64))) {
+            shadow.push(Violation::new("reason", "max_length", "reason must be at most 2000 characters").with_param("max", 2000_i64));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

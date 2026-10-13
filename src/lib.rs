@@ -267,51 +267,51 @@ impl LifecycleModuleBuilder {
 
         // ClearanceItem service
         let clearance_item_repository = Arc::new(ClearanceItemRepository::new(db_pool.clone()));
-        let clearance_item_service = Arc::new(ClearanceItemService::with_repository(clearance_item_repository.clone()));
+        let clearance_item_service = Arc::new(ClearanceItemService::with_repository(clearance_item_repository.clone()).with_guard(Arc::new(crate::application::service::ClearanceItemRowRules)));
 
         // Contract service
         let contract_repository = Arc::new(ContractRepository::new(db_pool.clone()));
-        let contract_service = Arc::new(ContractService::with_repository(contract_repository.clone()));
+        let contract_service = Arc::new(ContractService::with_repository(contract_repository.clone()).with_guard(Arc::new(crate::application::service::ContractRowRules)));
 
         // ContractTemplate service
         let contract_template_repository = Arc::new(ContractTemplateRepository::new(db_pool.clone()));
-        let contract_template_service = Arc::new(ContractTemplateService::with_repository(contract_template_repository.clone()));
+        let contract_template_service = Arc::new(ContractTemplateService::with_repository(contract_template_repository.clone()).with_guard(Arc::new(crate::application::service::ContractTemplateRowRules)));
 
         // DisciplineRecord service
         let discipline_record_repository = Arc::new(DisciplineRecordRepository::new(db_pool.clone()));
-        let discipline_record_service = Arc::new(DisciplineRecordService::with_repository(discipline_record_repository.clone()));
+        let discipline_record_service = Arc::new(DisciplineRecordService::with_repository(discipline_record_repository.clone()).with_guard(Arc::new(crate::application::service::DisciplineRecordRowRules)));
 
         // ExitInterview service
         let exit_interview_repository = Arc::new(ExitInterviewRepository::new(db_pool.clone()));
-        let exit_interview_service = Arc::new(ExitInterviewService::with_repository(exit_interview_repository.clone()));
+        let exit_interview_service = Arc::new(ExitInterviewService::with_repository(exit_interview_repository.clone()).with_guard(Arc::new(crate::application::service::ExitInterviewRowRules)));
 
         // FinalSettlement service
         let final_settlement_repository = Arc::new(FinalSettlementRepository::new(db_pool.clone()));
-        let final_settlement_service = Arc::new(FinalSettlementService::with_repository(final_settlement_repository.clone()));
+        let final_settlement_service = Arc::new(FinalSettlementService::with_repository(final_settlement_repository.clone()).with_guard(Arc::new(crate::application::service::FinalSettlementRowRules)));
 
         // Offboarding service
         let offboarding_repository = Arc::new(OffboardingRepository::new(db_pool.clone()));
-        let offboarding_service = Arc::new(OffboardingService::with_repository(offboarding_repository.clone()));
+        let offboarding_service = Arc::new(OffboardingService::with_repository(offboarding_repository.clone()).with_guard(Arc::new(crate::application::service::OffboardingRowRules)));
 
         // Onboarding service
         let onboarding_repository = Arc::new(OnboardingRepository::new(db_pool.clone()));
-        let onboarding_service = Arc::new(OnboardingService::with_repository(onboarding_repository.clone()));
+        let onboarding_service = Arc::new(OnboardingService::with_repository(onboarding_repository.clone()).with_guard(Arc::new(crate::application::service::OnboardingRowRules)));
 
         // OnboardingTask service
         let onboarding_task_repository = Arc::new(OnboardingTaskRepository::new(db_pool.clone()));
-        let onboarding_task_service = Arc::new(OnboardingTaskService::with_repository(onboarding_task_repository.clone()));
+        let onboarding_task_service = Arc::new(OnboardingTaskService::with_repository(onboarding_task_repository.clone()).with_guard(Arc::new(crate::application::service::OnboardingTaskRowRules)));
 
         // OnboardingTemplate service
         let onboarding_template_repository = Arc::new(OnboardingTemplateRepository::new(db_pool.clone()));
-        let onboarding_template_service = Arc::new(OnboardingTemplateService::with_repository(onboarding_template_repository.clone()));
+        let onboarding_template_service = Arc::new(OnboardingTemplateService::with_repository(onboarding_template_repository.clone()).with_guard(Arc::new(crate::application::service::OnboardingTemplateRowRules)));
 
         // OnboardingTemplateTask service
         let onboarding_template_task_repository = Arc::new(OnboardingTemplateTaskRepository::new(db_pool.clone()));
-        let onboarding_template_task_service = Arc::new(OnboardingTemplateTaskService::with_repository(onboarding_template_task_repository.clone()));
+        let onboarding_template_task_service = Arc::new(OnboardingTemplateTaskService::with_repository(onboarding_template_task_repository.clone()).with_guard(Arc::new(crate::application::service::OnboardingTemplateTaskRowRules)));
 
         // Promotion service
         let promotion_repository = Arc::new(PromotionRepository::new(db_pool.clone()));
-        let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()));
+        let promotion_service = Arc::new(PromotionService::with_repository(promotion_repository.clone()).with_guard(Arc::new(crate::application::service::PromotionRowRules)));
 
 
         // The extension builds its own state from what the generated build made.

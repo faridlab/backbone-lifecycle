@@ -32,3 +32,61 @@ pub type DisciplineRecordService = GenericCrudService<
     DisciplineRecordRepository,
 >;
 
+/// The rules the schema declares for DisciplineRecord, checked against the row a create or update
+/// would store. The generated build attaches it to [`DisciplineRecordService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct DisciplineRecordRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<DisciplineRecord> for DisciplineRecordRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, DisciplineRecord>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `employee_id_required` (@required on DisciplineRecord.employee_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["employee_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "employee_id")), r::not(r::is_empty(r::trim(r::field(row, "employee_id")))))) {
+            refuse.push(Violation::new("employee_id", "required", "employee_id is required"));
+        }
+        // `offense_required` (@required on DisciplineRecord.offense)
+        if (create || (update && r::changed(old.as_ref(), row, &["offense"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "offense")), r::not(r::is_empty(r::trim(r::field(row, "offense")))))) {
+            refuse.push(Violation::new("offense", "required", "offense is required"));
+        }
+        // `offense_max_length` (@length(max=200) on DisciplineRecord.offense)
+        if (create || (update && r::changed(old.as_ref(), row, &["offense"]))) && !r::holds(&r::le(r::length(r::field(row, "offense")), r::Val::Num(200.0_f64))) {
+            shadow.push(Violation::new("offense", "max_length", "offense must be at most 200 characters").with_param("max", 200_i64));
+        }
+        // `description_required` (@required on DisciplineRecord.description)
+        if (create || (update && r::changed(old.as_ref(), row, &["description"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "description")), r::not(r::is_empty(r::trim(r::field(row, "description")))))) {
+            refuse.push(Violation::new("description", "required", "description is required"));
+        }
+        // `description_max_length` (@length(max=4000) on DisciplineRecord.description)
+        if (create || (update && r::changed(old.as_ref(), row, &["description"]))) && !r::holds(&r::le(r::length(r::field(row, "description")), r::Val::Num(4000.0_f64))) {
+            shadow.push(Violation::new("description", "max_length", "description must be at most 4000 characters").with_param("max", 4000_i64));
+        }
+        // `acknowledged_via_max_length` (@length(max=40) on DisciplineRecord.acknowledged_via)
+        if (create || (update && r::changed(old.as_ref(), row, &["acknowledged_via"]))) && !r::holds(&r::le(r::length(r::field(row, "acknowledged_via")), r::Val::Num(40.0_f64))) {
+            shadow.push(Violation::new("acknowledged_via", "max_length", "acknowledged_via must be at most 40 characters").with_param("max", 40_i64));
+        }
+        // `cancel_reason_max_length` (@length(max=1000) on DisciplineRecord.cancel_reason)
+        if (create || (update && r::changed(old.as_ref(), row, &["cancel_reason"]))) && !r::holds(&r::le(r::length(r::field(row, "cancel_reason")), r::Val::Num(1000.0_f64))) {
+            shadow.push(Violation::new("cancel_reason", "max_length", "cancel_reason must be at most 1000 characters").with_param("max", 1000_i64));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

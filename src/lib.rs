@@ -55,9 +55,6 @@ pub use application::service::OnboardingTemplateService;
 pub use application::service::OnboardingTemplateTaskService;
 pub use application::service::PromotionService;
 
-// Re-exports - Workflows
-pub use application::workflows::*;
-
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;

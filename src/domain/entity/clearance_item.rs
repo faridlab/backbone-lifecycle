@@ -223,6 +223,9 @@ impl backbone_orm::EntityRepoMeta for ClearanceItem {
     fn search_fields() -> &'static [&'static str] {
         &["title"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("offboarding", "offboardings", "offboardingId")]
+    }
 }
 
 /// Builder for ClearanceItem entity

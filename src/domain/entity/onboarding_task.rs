@@ -248,6 +248,9 @@ impl backbone_orm::EntityRepoMeta for OnboardingTask {
     fn search_fields() -> &'static [&'static str] {
         &["title"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("onboarding", "onboardings", "onboardingId")]
+    }
 }
 
 /// Builder for OnboardingTask entity

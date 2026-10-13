@@ -401,6 +401,9 @@ impl backbone_orm::EntityRepoMeta for FinalSettlement {
     fn search_fields() -> &'static [&'static str] {
         &["period"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("offboarding", "offboardings", "offboardingId")]
+    }
 }
 
 /// Builder for FinalSettlement entity

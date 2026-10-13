@@ -1,0 +1,9 @@
+-- Down: drop the declared foreign keys for lifecycle module
+ALTER TABLE IF EXISTS lifecycle.onboarding_template_tasks DROP CONSTRAINT IF EXISTS fk_onboarding_template_tasks_template_id;
+ALTER TABLE IF EXISTS lifecycle.onboarding_tasks DROP CONSTRAINT IF EXISTS fk_onboarding_tasks_onboarding_id;
+ALTER TABLE IF EXISTS lifecycle.onboardings DROP CONSTRAINT IF EXISTS fk_onboardings_template_id;
+ALTER TABLE IF EXISTS lifecycle.final_settlements DROP CONSTRAINT IF EXISTS fk_final_settlements_offboarding_id;
+ALTER TABLE IF EXISTS lifecycle.exit_interviews DROP CONSTRAINT IF EXISTS fk_exit_interviews_offboarding_id;
+ALTER TABLE IF EXISTS lifecycle.contracts DROP CONSTRAINT IF EXISTS fk_contracts_previous_contract_id;
+ALTER TABLE IF EXISTS lifecycle.contracts DROP CONSTRAINT IF EXISTS fk_contracts_template_id;
+ALTER TABLE IF EXISTS lifecycle.clearance_items DROP CONSTRAINT IF EXISTS fk_clearance_items_offboarding_id;

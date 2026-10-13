@@ -232,6 +232,9 @@ impl backbone_orm::EntityRepoMeta for ExitInterview {
     fn search_fields() -> &'static [&'static str] {
         &[]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("offboarding", "offboardings", "offboardingId")]
+    }
 }
 
 /// Builder for ExitInterview entity

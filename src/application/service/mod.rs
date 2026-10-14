@@ -46,5 +46,101 @@ pub use onboarding_template_service::OnboardingTemplateRowRules;
 pub use onboarding_template_task_service::OnboardingTemplateTaskRowRules;
 pub use promotion_service::PromotionRowRules;
 
+/// A `ClearanceItemService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_clearance_item_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::ClearanceItemRepository>,
+) -> ClearanceItemService {
+    ClearanceItemService::with_repository(repository).with_guard(std::sync::Arc::new(ClearanceItemRowRules))
+}
+
+/// A `ContractService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_contract_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::ContractRepository>,
+) -> ContractService {
+    ContractService::with_repository(repository).with_guard(std::sync::Arc::new(ContractRowRules))
+}
+
+/// A `ContractTemplateService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_contract_template_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::ContractTemplateRepository>,
+) -> ContractTemplateService {
+    ContractTemplateService::with_repository(repository).with_guard(std::sync::Arc::new(ContractTemplateRowRules))
+}
+
+/// A `DisciplineRecordService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_discipline_record_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::DisciplineRecordRepository>,
+) -> DisciplineRecordService {
+    DisciplineRecordService::with_repository(repository).with_guard(std::sync::Arc::new(DisciplineRecordRowRules))
+}
+
+/// A `ExitInterviewService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_exit_interview_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::ExitInterviewRepository>,
+) -> ExitInterviewService {
+    ExitInterviewService::with_repository(repository).with_guard(std::sync::Arc::new(ExitInterviewRowRules))
+}
+
+/// A `FinalSettlementService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_final_settlement_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::FinalSettlementRepository>,
+) -> FinalSettlementService {
+    FinalSettlementService::with_repository(repository).with_guard(std::sync::Arc::new(FinalSettlementRowRules))
+}
+
+/// A `OffboardingService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_offboarding_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OffboardingRepository>,
+) -> OffboardingService {
+    OffboardingService::with_repository(repository).with_guard(std::sync::Arc::new(OffboardingRowRules))
+}
+
+/// A `OnboardingService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_onboarding_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OnboardingRepository>,
+) -> OnboardingService {
+    OnboardingService::with_repository(repository).with_guard(std::sync::Arc::new(OnboardingRowRules))
+}
+
+/// A `OnboardingTaskService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_onboarding_task_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OnboardingTaskRepository>,
+) -> OnboardingTaskService {
+    OnboardingTaskService::with_repository(repository).with_guard(std::sync::Arc::new(OnboardingTaskRowRules))
+}
+
+/// A `OnboardingTemplateService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_onboarding_template_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OnboardingTemplateRepository>,
+) -> OnboardingTemplateService {
+    OnboardingTemplateService::with_repository(repository).with_guard(std::sync::Arc::new(OnboardingTemplateRowRules))
+}
+
+/// A `OnboardingTemplateTaskService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_onboarding_template_task_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OnboardingTemplateTaskRepository>,
+) -> OnboardingTemplateTaskService {
+    OnboardingTemplateTaskService::with_repository(repository).with_guard(std::sync::Arc::new(OnboardingTemplateTaskRowRules))
+}
+
+/// A `PromotionService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_promotion_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::PromotionRepository>,
+) -> PromotionService {
+    PromotionService::with_repository(repository).with_guard(std::sync::Arc::new(PromotionRowRules))
+}
+
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

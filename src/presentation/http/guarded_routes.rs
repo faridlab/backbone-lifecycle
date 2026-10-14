@@ -905,17 +905,17 @@ mod overlap_tests {
         // mounts alongside the verbs.
         let generic = Router::new()
             .merge(crate::presentation::http::create_onboarding_task_write_routes(Arc::new(
-                OnboardingTaskService::with_repository(OnboardingTaskRepository::new(
+                crate::application::service::build_onboarding_task_service(OnboardingTaskRepository::new(
                     pool.clone(),
                 ).into()),
             )))
             .merge(crate::presentation::http::create_clearance_item_write_routes(Arc::new(
-                ClearanceItemService::with_repository(ClearanceItemRepository::new(
+                crate::application::service::build_clearance_item_service(ClearanceItemRepository::new(
                     pool.clone(),
                 ).into()),
             )))
             .merge(crate::presentation::http::create_exit_interview_write_routes(Arc::new(
-                ExitInterviewService::with_repository(ExitInterviewRepository::new(pool).into()),
+                crate::application::service::build_exit_interview_service(ExitInterviewRepository::new(pool).into()),
             )));
 
         // Panics here = a verb path collides with a generic collection route.

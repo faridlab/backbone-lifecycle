@@ -34,7 +34,7 @@ pub struct CreatePromotionDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
-    #[serde(alias = "promotion_type")]
+    #[serde(default = "default_create_promotion_promotion_type", alias = "promotion_type")]
     pub promotion_type: PromotionType,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "position_id_from")]
     pub position_id_from: Option<Uuid>,
@@ -53,6 +53,7 @@ pub struct CreatePromotionDto {
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(alias = "effective_date")]
     pub effective_date: NaiveDate,
+    #[serde(default = "default_create_promotion_status")]
     pub status: PromotionStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "approval_request_id")]
     pub approval_request_id: Option<Uuid>,
@@ -66,6 +67,14 @@ pub struct CreatePromotionDto {
     pub appraisal_rating: Option<Decimal>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+fn default_create_promotion_promotion_type() -> PromotionType {
+    PromotionType::Promotion
+}
+
+fn default_create_promotion_status() -> PromotionStatus {
+    PromotionStatus::Draft
 }
 
 // =============================================================================
@@ -134,37 +143,37 @@ pub struct PatchPromotionDto {
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "promotion_type")]
     pub promotion_type: Option<PromotionType>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "position_id_from")]
-    pub position_id_from: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "position_id_to")]
-    pub position_id_to: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "level_id_from")]
-    pub level_id_from: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "level_id_to")]
-    pub level_id_to: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "department_id_from")]
-    pub department_id_from: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "department_id_to")]
-    pub department_id_to: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "proposed_salary")]
-    pub proposed_salary: Option<Decimal>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "position_id_from")]
+    pub position_id_from: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "position_id_to")]
+    pub position_id_to: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "level_id_from")]
+    pub level_id_from: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "level_id_to")]
+    pub level_id_to: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "department_id_from")]
+    pub department_id_from: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "department_id_to")]
+    pub department_id_to: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "proposed_salary")]
+    pub proposed_salary: Option<Option<Decimal>>,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "effective_date")]
     pub effective_date: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<PromotionStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "approval_request_id")]
-    pub approval_request_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "requested_by")]
-    pub requested_by: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "approved_by")]
-    pub approved_by: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "appraisal_id")]
-    pub appraisal_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "appraisal_rating")]
-    pub appraisal_rating: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "approval_request_id")]
+    pub approval_request_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "requested_by")]
+    pub requested_by: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "approved_by")]
+    pub approved_by: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "appraisal_id")]
+    pub appraisal_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "appraisal_rating")]
+    pub appraisal_rating: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub reason: Option<Option<String>>,
 }
 
 impl PatchPromotionDto {
@@ -393,12 +402,4 @@ impl backbone_core::ApplyUpdateDto<UpdatePromotionDto> for Promotion {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to Promotion here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

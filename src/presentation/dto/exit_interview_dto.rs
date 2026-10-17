@@ -79,14 +79,14 @@ pub struct PatchExitInterviewDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "offboarding_id")]
-    pub offboarding_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "conducted_by")]
-    pub conducted_by: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "offboarding_id")]
+    pub offboarding_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "conducted_by")]
+    pub conducted_by: Option<Option<Uuid>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub responses: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "would_recommend")]
-    pub would_recommend: Option<bool>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "would_recommend")]
+    pub would_recommend: Option<Option<bool>>,
 }
 
 impl PatchExitInterviewDto {
@@ -254,12 +254,4 @@ impl backbone_core::ApplyUpdateDto<UpdateExitInterviewDto> for ExitInterview {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to ExitInterview here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

@@ -33,11 +33,15 @@ pub struct CreateOnboardingTemplateDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_default")]
+    #[serde(default, alias = "is_default")]
     pub is_default: bool,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_active")]
+    #[serde(default = "default_create_onboarding_template_is_active", alias = "is_active")]
     pub is_active: bool,
+}
+
+fn default_create_onboarding_template_is_active() -> bool {
+    true
 }
 
 // =============================================================================
@@ -79,8 +83,8 @@ pub struct PatchOnboardingTemplateDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub description: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "is_default")]
     pub is_default: Option<bool>,
@@ -251,12 +255,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTemplateDto> for OnboardingTe
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to OnboardingTemplate here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

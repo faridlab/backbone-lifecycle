@@ -36,7 +36,12 @@ pub struct CreateClearanceItemDto {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "clearer_employee_id")]
     pub clearer_employee_id: Option<Uuid>,
+    #[serde(default = "default_create_clearance_item_status")]
     pub status: ClearanceStatus,
+}
+
+fn default_create_clearance_item_status() -> ClearanceStatus {
+    ClearanceStatus::Pending
 }
 
 // =============================================================================
@@ -79,8 +84,8 @@ pub struct PatchClearanceItemDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "clearer_employee_id")]
-    pub clearer_employee_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "clearer_employee_id")]
+    pub clearer_employee_id: Option<Option<Uuid>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<ClearanceStatus>,
 }
@@ -246,12 +251,4 @@ impl backbone_core::ApplyUpdateDto<UpdateClearanceItemDto> for ClearanceItem {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to ClearanceItem here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

@@ -4475,8 +4475,6 @@ components:
       required:
         - offboarding_id
         - title
-        - status
-        - metadata
       properties:
         offboarding_id:
           type: string
@@ -4489,8 +4487,6 @@ components:
           format: uuid
         status:
           type: string
-        metadata:
-          type: object
 
     UpdateClearanceItemRequest:
       type: object
@@ -4498,7 +4494,6 @@ components:
         - offboarding_id
         - title
         - status
-        - metadata
       properties:
         offboarding_id:
           type: string
@@ -4511,8 +4506,6 @@ components:
           format: uuid
         status:
           type: string
-        metadata:
-          type: object
 
     PatchClearanceItemRequest:
       type: object
@@ -4528,8 +4521,6 @@ components:
           format: uuid
         status:
           type: string
-        metadata:
-          type: object
 
     ClearanceItemList:
       type: object
@@ -4622,9 +4613,6 @@ components:
         - employee_id
         - contract_type
         - start_date
-        - status
-        - cumulative_pkwt_months
-        - metadata
       properties:
         employment_id:
           type: string
@@ -4669,8 +4657,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateContractRequest:
       type: object
@@ -4681,7 +4667,6 @@ components:
         - start_date
         - status
         - cumulative_pkwt_months
-        - metadata
       properties:
         employment_id:
           type: string
@@ -4726,8 +4711,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchContractRequest:
       type: object
@@ -4775,8 +4758,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     ContractList:
       type: object
@@ -4828,7 +4809,6 @@ components:
         - name
         - contract_type
         - body_template
-        - metadata
       properties:
         name:
           type: string
@@ -4836,8 +4816,6 @@ components:
           type: string
         body_template:
           type: string
-        metadata:
-          type: object
 
     UpdateContractTemplateRequest:
       type: object
@@ -4845,7 +4823,6 @@ components:
         - name
         - contract_type
         - body_template
-        - metadata
       properties:
         name:
           type: string
@@ -4853,8 +4830,6 @@ components:
           type: string
         body_template:
           type: string
-        metadata:
-          type: object
 
     PatchContractTemplateRequest:
       type: object
@@ -4865,8 +4840,6 @@ components:
           type: string
         body_template:
           type: string
-        metadata:
-          type: object
 
     ContractTemplateList:
       type: object
@@ -4966,10 +4939,6 @@ components:
         - issued_at
         - valid_until
         - served_disposition
-        - status
-        - prior_active_sp1
-        - prior_active_sp2
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5014,8 +4983,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateDisciplineRecordRequest:
       type: object
@@ -5030,7 +4997,6 @@ components:
         - status
         - prior_active_sp1
         - prior_active_sp2
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5075,8 +5041,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchDisciplineRecordRequest:
       type: object
@@ -5124,8 +5088,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     DisciplineRecordList:
       type: object
@@ -5185,7 +5147,6 @@ components:
       required:
         - employee_id
         - responses
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5203,15 +5164,12 @@ components:
         would_recommend:
           nullable: true
           type: boolean
-        metadata:
-          type: object
 
     UpdateExitInterviewRequest:
       type: object
       required:
         - employee_id
         - responses
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5229,8 +5187,6 @@ components:
         would_recommend:
           nullable: true
           type: boolean
-        metadata:
-          type: object
 
     PatchExitInterviewRequest:
       type: object
@@ -5251,8 +5207,6 @@ components:
         would_recommend:
           nullable: true
           type: boolean
-        metadata:
-          type: object
 
     ExitInterviewList:
       type: object
@@ -5368,10 +5322,7 @@ components:
         - offboarding_id
         - period
         - base_pay
-        - last_pay_via_payroll
         - net_payable
-        - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5438,8 +5389,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateFinalSettlementRequest:
       type: object
@@ -5451,7 +5400,6 @@ components:
         - last_pay_via_payroll
         - net_payable
         - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5518,8 +5466,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchFinalSettlementRequest:
       type: object
@@ -5589,8 +5535,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     FinalSettlementList:
       type: object
@@ -5653,11 +5597,8 @@ components:
       type: object
       required:
         - employee_id
-        - reason
         - notice_date
         - last_working_day
-        - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5676,8 +5617,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateOffboardingRequest:
       type: object
@@ -5687,7 +5626,6 @@ components:
         - notice_date
         - last_working_day
         - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5702,12 +5640,6 @@ components:
           format: date
         status:
           type: string
-        final_settlement_id:
-          nullable: true
-          type: string
-          format: uuid
-        metadata:
-          type: object
 
     PatchOffboardingRequest:
       type: object
@@ -5725,12 +5657,6 @@ components:
           format: date
         status:
           type: string
-        final_settlement_id:
-          nullable: true
-          type: string
-          format: uuid
-        metadata:
-          type: object
 
     OffboardingList:
       type: object
@@ -5799,8 +5725,6 @@ components:
       required:
         - employee_id
         - start_date
-        - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5826,8 +5750,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateOnboardingRequest:
       type: object
@@ -5835,7 +5757,6 @@ components:
         - employee_id
         - start_date
         - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -5861,8 +5782,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchOnboardingRequest:
       type: object
@@ -5891,8 +5810,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     OnboardingList:
       type: object
@@ -5955,8 +5872,6 @@ components:
       required:
         - onboarding_id
         - title
-        - status
-        - metadata
       properties:
         onboarding_id:
           type: string
@@ -5976,8 +5891,6 @@ components:
           format: date
         status:
           type: string
-        metadata:
-          type: object
 
     UpdateOnboardingTaskRequest:
       type: object
@@ -5985,7 +5898,6 @@ components:
         - onboarding_id
         - title
         - status
-        - metadata
       properties:
         onboarding_id:
           type: string
@@ -6005,8 +5917,6 @@ components:
           format: date
         status:
           type: string
-        metadata:
-          type: object
 
     PatchOnboardingTaskRequest:
       type: object
@@ -6029,8 +5939,6 @@ components:
           format: date
         status:
           type: string
-        metadata:
-          type: object
 
     OnboardingTaskList:
       type: object
@@ -6083,9 +5991,6 @@ components:
       type: object
       required:
         - name
-        - is_default
-        - is_active
-        - metadata
       properties:
         name:
           type: string
@@ -6096,8 +6001,6 @@ components:
           type: boolean
         is_active:
           type: boolean
-        metadata:
-          type: object
 
     UpdateOnboardingTemplateRequest:
       type: object
@@ -6105,7 +6008,6 @@ components:
         - name
         - is_default
         - is_active
-        - metadata
       properties:
         name:
           type: string
@@ -6116,8 +6018,6 @@ components:
           type: boolean
         is_active:
           type: boolean
-        metadata:
-          type: object
 
     PatchOnboardingTemplateRequest:
       type: object
@@ -6131,8 +6031,6 @@ components:
           type: boolean
         is_active:
           type: boolean
-        metadata:
-          type: object
 
     OnboardingTemplateList:
       type: object
@@ -6195,9 +6093,6 @@ components:
       required:
         - template_id
         - title
-        - due_day_offset
-        - ordinal
-        - metadata
       properties:
         template_id:
           type: string
@@ -6216,8 +6111,6 @@ components:
         ordinal:
           type: integer
           format: int32
-        metadata:
-          type: object
 
     UpdateOnboardingTemplateTaskRequest:
       type: object
@@ -6226,7 +6119,6 @@ components:
         - title
         - due_day_offset
         - ordinal
-        - metadata
       properties:
         template_id:
           type: string
@@ -6245,8 +6137,6 @@ components:
         ordinal:
           type: integer
           format: int32
-        metadata:
-          type: object
 
     PatchOnboardingTemplateTaskRequest:
       type: object
@@ -6268,8 +6158,6 @@ components:
         ordinal:
           type: integer
           format: int32
-        metadata:
-          type: object
 
     OnboardingTemplateTaskList:
       type: object
@@ -6373,10 +6261,7 @@ components:
       type: object
       required:
         - employee_id
-        - promotion_type
         - effective_date
-        - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -6437,8 +6322,6 @@ components:
         reason:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     UpdatePromotionRequest:
       type: object
@@ -6447,7 +6330,6 @@ components:
         - promotion_type
         - effective_date
         - status
-        - metadata
       properties:
         employee_id:
           type: string
@@ -6508,8 +6390,6 @@ components:
         reason:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     PatchPromotionRequest:
       type: object
@@ -6573,8 +6453,6 @@ components:
         reason:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     PromotionList:
       type: object

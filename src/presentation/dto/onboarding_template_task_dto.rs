@@ -38,9 +38,10 @@ pub struct CreateOnboardingTemplateTaskDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "owner_role")]
     pub owner_role: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
-    #[serde(alias = "due_day_offset")]
+    #[serde(default, alias = "due_day_offset")]
     pub due_day_offset: i32,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
+    #[serde(default)]
     pub ordinal: i32,
 }
 
@@ -90,10 +91,10 @@ pub struct PatchOnboardingTemplateTaskDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub category: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "owner_role")]
-    pub owner_role: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub category: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "owner_role")]
+    pub owner_role: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "due_day_offset")]
     pub due_day_offset: Option<i32>,
@@ -275,12 +276,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTemplateTaskDto> for Onboardi
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to OnboardingTemplateTask here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

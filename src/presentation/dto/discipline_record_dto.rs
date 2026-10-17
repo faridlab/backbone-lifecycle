@@ -47,6 +47,7 @@ pub struct CreateDisciplineRecordDto {
     pub valid_until: DateTime<Utc>,
     #[serde(alias = "served_disposition")]
     pub served_disposition: DisciplineServedDisposition,
+    #[serde(default = "default_create_discipline_record_status")]
     pub status: DisciplineStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "acknowledged_at")]
     pub acknowledged_at: Option<DateTime<Utc>>,
@@ -57,13 +58,17 @@ pub struct CreateDisciplineRecordDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "cancel_reason")]
     pub cancel_reason: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
-    #[serde(alias = "prior_active_sp1")]
+    #[serde(default, alias = "prior_active_sp1")]
     pub prior_active_sp1: i32,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
-    #[serde(alias = "prior_active_sp2")]
+    #[serde(default, alias = "prior_active_sp2")]
     pub prior_active_sp2: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "issued_by")]
     pub issued_by: Option<Uuid>,
+}
+
+fn default_create_discipline_record_status() -> DisciplineStatus {
+    DisciplineStatus::Issued
 }
 
 // =============================================================================
@@ -146,22 +151,22 @@ pub struct PatchDisciplineRecordDto {
     pub served_disposition: Option<DisciplineServedDisposition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<DisciplineStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "acknowledged_at")]
-    pub acknowledged_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "acknowledged_via")]
-    pub acknowledged_via: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "document_file_id")]
-    pub document_file_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "cancel_reason")]
-    pub cancel_reason: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "acknowledged_at")]
+    pub acknowledged_at: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "acknowledged_via")]
+    pub acknowledged_via: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "document_file_id")]
+    pub document_file_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "cancel_reason")]
+    pub cancel_reason: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "prior_active_sp1")]
     pub prior_active_sp1: Option<i32>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "prior_active_sp2")]
     pub prior_active_sp2: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "issued_by")]
-    pub issued_by: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "issued_by")]
+    pub issued_by: Option<Option<Uuid>>,
 }
 
 impl PatchDisciplineRecordDto {
@@ -385,12 +390,4 @@ impl backbone_core::ApplyUpdateDto<UpdateDisciplineRecordDto> for DisciplineReco
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to DisciplineRecord here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

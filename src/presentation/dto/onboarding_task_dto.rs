@@ -41,7 +41,12 @@ pub struct CreateOnboardingTaskDto {
     pub owner_employee_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "due_date")]
     pub due_date: Option<NaiveDate>,
+    #[serde(default = "default_create_onboarding_task_status")]
     pub status: TaskStatus,
+}
+
+fn default_create_onboarding_task_status() -> TaskStatus {
+    TaskStatus::Pending
 }
 
 // =============================================================================
@@ -88,12 +93,12 @@ pub struct PatchOnboardingTaskDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub category: Option<TaskCategory>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "owner_employee_id")]
-    pub owner_employee_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "due_date")]
-    pub due_date: Option<NaiveDate>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub category: Option<Option<TaskCategory>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "owner_employee_id")]
+    pub owner_employee_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "due_date")]
+    pub due_date: Option<Option<NaiveDate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<TaskStatus>,
 }
@@ -269,12 +274,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingTaskDto> for OnboardingTask {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to OnboardingTask here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

@@ -33,6 +33,7 @@ pub struct CreateOffboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
+    #[serde(default = "default_create_offboarding_reason")]
     pub reason: OffboardingReason,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(alias = "notice_date")]
@@ -40,9 +41,18 @@ pub struct CreateOffboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(alias = "last_working_day")]
     pub last_working_day: NaiveDate,
+    #[serde(default = "default_create_offboarding_status")]
     pub status: OffboardingStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "final_settlement_id")]
     pub final_settlement_id: Option<Uuid>,
+}
+
+fn default_create_offboarding_reason() -> OffboardingReason {
+    OffboardingReason::Resignation
+}
+
+fn default_create_offboarding_status() -> OffboardingStatus {
+    OffboardingStatus::Initiated
 }
 
 // =============================================================================
@@ -268,12 +278,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOffboardingDto> for Offboarding {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to Offboarding here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

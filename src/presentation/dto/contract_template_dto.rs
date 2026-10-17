@@ -238,11 +238,3 @@ impl backbone_core::ApplyUpdateDto<UpdateContractTemplateDto> for ContractTempla
     }
 }
 
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to ContractTemplate here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
-

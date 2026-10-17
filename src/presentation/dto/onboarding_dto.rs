@@ -35,6 +35,7 @@ pub struct CreateOnboardingDto {
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(alias = "start_date")]
     pub start_date: NaiveDate,
+    #[serde(default = "default_create_onboarding_status")]
     pub status: OnboardingStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "completed_at")]
     pub completed_at: Option<DateTime<Utc>>,
@@ -44,6 +45,10 @@ pub struct CreateOnboardingDto {
     pub confirmed_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "template_id")]
     pub template_id: Option<Uuid>,
+}
+
+fn default_create_onboarding_status() -> OnboardingStatus {
+    OnboardingStatus::Pending
 }
 
 // =============================================================================
@@ -95,14 +100,14 @@ pub struct PatchOnboardingDto {
     pub start_date: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OnboardingStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "completed_at")]
-    pub completed_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "probation_end_date")]
-    pub probation_end_date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "confirmed_at")]
-    pub confirmed_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "template_id")]
-    pub template_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "completed_at")]
+    pub completed_at: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "probation_end_date")]
+    pub probation_end_date: Option<Option<NaiveDate>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "confirmed_at")]
+    pub confirmed_at: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "template_id")]
+    pub template_id: Option<Option<Uuid>>,
 }
 
 impl PatchOnboardingDto {
@@ -281,12 +286,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOnboardingDto> for Onboarding {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to Onboarding here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

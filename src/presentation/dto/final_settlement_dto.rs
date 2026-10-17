@@ -65,17 +65,26 @@ pub struct CreateFinalSettlementDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "statutory_effective_from")]
     pub statutory_effective_from: Option<NaiveDate>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "last_pay_via_payroll")]
+    #[serde(default = "default_create_final_settlement_last_pay_via_payroll", alias = "last_pay_via_payroll")]
     pub last_pay_via_payroll: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "tax_deduction")]
     pub tax_deduction: Option<Decimal>,
     #[serde(alias = "net_payable")]
     pub net_payable: Decimal,
+    #[serde(default = "default_create_final_settlement_status")]
     pub status: SettlementStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
     pub accounting_post_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "journal_id")]
     pub journal_id: Option<Uuid>,
+}
+
+fn default_create_final_settlement_last_pay_via_payroll() -> bool {
+    true
+}
+
+fn default_create_final_settlement_status() -> SettlementStatus {
+    SettlementStatus::Draft
 }
 
 // =============================================================================
@@ -161,43 +170,43 @@ pub struct PatchFinalSettlementDto {
     pub period: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "base_pay")]
     pub base_pay: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "unused_leave_payout")]
-    pub unused_leave_payout: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "pesangon_amount")]
-    pub pesangon_amount: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "uang_pesangon")]
-    pub uang_pesangon: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upmk: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "uang_pisah")]
-    pub uang_pisah: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "monthly_wage")]
-    pub monthly_wage: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "daily_wage")]
-    pub daily_wage: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "work_days_per_week")]
-    pub work_days_per_week: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "unused_leave_days")]
-    pub unused_leave_days: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "tenure_years")]
-    pub tenure_years: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "legal_basis")]
-    pub legal_basis: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "statutory_effective_from")]
-    pub statutory_effective_from: Option<NaiveDate>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "unused_leave_payout")]
+    pub unused_leave_payout: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "pesangon_amount")]
+    pub pesangon_amount: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "uang_pesangon")]
+    pub uang_pesangon: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub upmk: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "uang_pisah")]
+    pub uang_pisah: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "monthly_wage")]
+    pub monthly_wage: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "daily_wage")]
+    pub daily_wage: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "work_days_per_week")]
+    pub work_days_per_week: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "unused_leave_days")]
+    pub unused_leave_days: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "tenure_years")]
+    pub tenure_years: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "legal_basis")]
+    pub legal_basis: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "statutory_effective_from")]
+    pub statutory_effective_from: Option<Option<NaiveDate>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "last_pay_via_payroll")]
     pub last_pay_via_payroll: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "tax_deduction")]
-    pub tax_deduction: Option<Decimal>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "tax_deduction")]
+    pub tax_deduction: Option<Option<Decimal>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "net_payable")]
     pub net_payable: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<SettlementStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
-    pub accounting_post_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "journal_id")]
-    pub journal_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "accounting_post_id")]
+    pub accounting_post_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "journal_id")]
+    pub journal_id: Option<Option<Uuid>>,
 }
 
 impl PatchFinalSettlementDto {
@@ -453,12 +462,4 @@ impl backbone_core::ApplyUpdateDto<UpdateFinalSettlementDto> for FinalSettlement
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to FinalSettlement here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

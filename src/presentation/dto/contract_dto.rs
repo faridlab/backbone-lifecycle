@@ -45,6 +45,7 @@ pub struct CreateContractDto {
     pub start_date: NaiveDate,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "end_date")]
     pub end_date: Option<NaiveDate>,
+    #[serde(default = "default_create_contract_status")]
     pub status: ContractStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "document_file_id")]
     pub document_file_id: Option<Uuid>,
@@ -53,12 +54,16 @@ pub struct CreateContractDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "previous_contract_id")]
     pub previous_contract_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
-    #[serde(alias = "cumulative_pkwt_months")]
+    #[serde(default, alias = "cumulative_pkwt_months")]
     pub cumulative_pkwt_months: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "reminder_sent_at")]
     pub reminder_sent_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "created_by")]
     pub created_by: Option<Uuid>,
+}
+
+fn default_create_contract_status() -> ContractStatus {
+    ContractStatus::Active
 }
 
 // =============================================================================
@@ -124,28 +129,28 @@ pub struct PatchContractDto {
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "contract_type")]
     pub contract_type: Option<ContractType>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "contract_no")]
-    pub contract_no: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "contract_no")]
+    pub contract_no: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "start_date")]
     pub start_date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "end_date")]
-    pub end_date: Option<NaiveDate>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "end_date")]
+    pub end_date: Option<Option<NaiveDate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<ContractStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "document_file_id")]
-    pub document_file_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "template_id")]
-    pub template_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "previous_contract_id")]
-    pub previous_contract_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "document_file_id")]
+    pub document_file_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "template_id")]
+    pub template_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "previous_contract_id")]
+    pub previous_contract_id: Option<Option<Uuid>>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "cumulative_pkwt_months")]
     pub cumulative_pkwt_months: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "reminder_sent_at")]
-    pub reminder_sent_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "created_by")]
-    pub created_by: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "reminder_sent_at")]
+    pub reminder_sent_at: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "created_by")]
+    pub created_by: Option<Option<Uuid>>,
 }
 
 impl PatchContractDto {
@@ -356,12 +361,4 @@ impl backbone_core::ApplyUpdateDto<UpdateContractDto> for Contract {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to Contract here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

@@ -41,6 +41,8 @@ pub struct CreateOffboardingDto {
     #[serde(alias = "last_working_day")]
     pub last_working_day: NaiveDate,
     pub status: OffboardingStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "final_settlement_id")]
+    pub final_settlement_id: Option<Uuid>,
 }
 
 // =============================================================================
@@ -124,6 +126,7 @@ pub struct OffboardingResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "2024-01-01"))]
     pub last_working_day: NaiveDate,
     pub status: OffboardingStatus,
+    pub final_settlement_id: Option<Uuid>,
     pub metadata: AuditMetadata,
 }
 
@@ -200,6 +203,7 @@ impl From<Offboarding> for OffboardingResponseDto {
             notice_date: entity.notice_date,
             last_working_day: entity.last_working_day,
             status: entity.status,
+            final_settlement_id: entity.final_settlement_id,
             metadata: entity.metadata,
         }
     }
@@ -227,6 +231,7 @@ impl From<CreateOffboardingDto> for Offboarding {
             notice_date: dto.notice_date,
             last_working_day: dto.last_working_day,
             status: dto.status,
+            final_settlement_id: dto.final_settlement_id,
             metadata: AuditMetadata::default(),
         }
     }
@@ -241,6 +246,7 @@ impl From<&Offboarding> for OffboardingResponseDto {
             notice_date: entity.notice_date.clone(),
             last_working_day: entity.last_working_day.clone(),
             status: entity.status.clone(),
+            final_settlement_id: entity.final_settlement_id.clone(),
             metadata: entity.metadata.clone(),
         }
     }

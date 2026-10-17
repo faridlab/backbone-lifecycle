@@ -47,12 +47,13 @@ pub struct OffboardingFilter {
     pub employee_id: Option<Uuid>,
     pub reason: Option<OffboardingReason>,
     pub status: Option<OffboardingStatus>,
+    pub final_settlement_id: Option<Uuid>,
 }
 
 impl OffboardingFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.employee_id.is_some() || self.reason.is_some() || self.status.is_some()
+        self.employee_id.is_some() || self.reason.is_some() || self.status.is_some() || self.final_settlement_id.is_some()
     }
 }
 

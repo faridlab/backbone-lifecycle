@@ -394,6 +394,7 @@ async fn setup(pool: &PgPool) -> sqlx::Result<()> {
         include_str!("../migrations/20261003100000_widen_offboarding_reason.up.sql"),
         include_str!("../migrations/20261003100001_create_severance_statutory_tables.up.sql"),
         include_str!("../migrations/20261003100002_add_final_settlement_breakdown.up.sql"),
+        include_str!("../migrations/20261017120000_add_offboarding_final_settlement_link.up.sql"),
     ] {
         sqlx::raw_sql(sql).execute(pool).await?;
     }
@@ -1757,6 +1758,14 @@ async fn settlement_draft_is_idempotent_and_confirm_stamps_only_after_the_ack(
     );
     assert_eq!(row.get::<String, _>("status"), "draft");
     assert!(row.get::<Option<Uuid>, _>("accounting_post_id").is_none());
+
+    // The offboarding now names the settlement drafted for it.
+    let linked: Option<Uuid> =
+        sqlx::query_scalar("SELECT final_settlement_id FROM lifecycle.offboardings WHERE id=$1")
+            .bind(offboarding_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(linked, Some(settlement_id), "the offboarding links its settlement");
 
     // Double draft → the collision surfaces the winner's id.
     let err = scoped(&pool, company_id, svc.draft_from_offboarding(offboarding_id))

@@ -440,6 +440,7 @@ pub struct OffboardingDto {
     pub notice_date: NaiveDate,
     pub last_working_day: NaiveDate,
     pub status: OffboardingStatus,
+    pub final_settlement_id: Option<Uuid>,
     pub metadata: serde_json::Value,
 }
 

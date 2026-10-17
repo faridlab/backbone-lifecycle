@@ -27,6 +27,7 @@ impl TestDataGenerator for OffboardingTestData {
             "notice_date": Utc::now().format("%Y-%m-%d").to_string(),
             "last_working_day": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "initiated",
+            "final_settlement_id": null,
             "metadata": json!({}),
         })
     }
@@ -39,6 +40,7 @@ impl TestDataGenerator for OffboardingTestData {
             "notice_date": Utc::now().format("%Y-%m-%d").to_string(),
             "last_working_day": Utc::now().format("%Y-%m-%d").to_string(),
             "status": "initiated",
+            "final_settlement_id": null,
             "metadata": json!({}),
         })
     }

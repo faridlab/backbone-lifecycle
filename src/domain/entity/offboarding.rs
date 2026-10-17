@@ -56,6 +56,7 @@ pub struct Offboarding {
     pub notice_date: NaiveDate,
     pub last_working_day: NaiveDate,
     pub status: OffboardingStatus,
+    pub final_settlement_id: Option<Uuid>,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -76,6 +77,7 @@ impl Offboarding {
             notice_date,
             last_working_day,
             status,
+            final_settlement_id: None,
             metadata: AuditMetadata::default(),
         }
     }
@@ -137,6 +139,16 @@ impl Offboarding {
 
 
     // ==========================================================
+    // Fluent Setters (with_* for optional fields)
+    // ==========================================================
+
+    /// Set the final_settlement_id field (chainable)
+    pub fn with_final_settlement_id(mut self, value: Uuid) -> Self {
+        self.final_settlement_id = Some(value);
+        self
+    }
+
+    // ==========================================================
     // Partial Update
     // ==========================================================
 
@@ -159,6 +171,9 @@ impl Offboarding {
                 "status" => {
                     if let Ok(v) = serde_json::from_value(value) { self.status = v; }
                 }
+                "final_settlement_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.final_settlement_id = v; }
+                }
                 _ => {} // ignore unknown fields
             }
         }
@@ -179,6 +194,9 @@ impl super::Entity for Offboarding {
 }
 
 impl backbone_core::PersistentEntity for Offboarding {
+    fn write_protected_fields() -> &'static [&'static str] {
+        &["final_settlement_id"]
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }
@@ -212,6 +230,7 @@ impl backbone_orm::EntityRepoMeta for Offboarding {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
+        m.insert("final_settlement_id".to_string(), "uuid".to_string());
         m.insert("reason".to_string(), "offboarding_reason".to_string());
         m.insert("status".to_string(), "offboarding_status".to_string());
         m.insert("notice_date".to_string(), "date".to_string());
@@ -234,6 +253,7 @@ pub struct OffboardingBuilder {
     notice_date: Option<NaiveDate>,
     last_working_day: Option<NaiveDate>,
     status: Option<OffboardingStatus>,
+    final_settlement_id: Option<Uuid>,
 }
 
 impl OffboardingBuilder {
@@ -267,6 +287,12 @@ impl OffboardingBuilder {
         self
     }
 
+    /// Set the final_settlement_id field (optional)
+    pub fn final_settlement_id(mut self, value: Uuid) -> Self {
+        self.final_settlement_id = Some(value);
+        self
+    }
+
     /// Build the Offboarding entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -282,6 +308,7 @@ impl OffboardingBuilder {
             notice_date,
             last_working_day,
             status: self.status.unwrap_or_default(),
+            final_settlement_id: self.final_settlement_id,
             metadata: AuditMetadata::default(),
         })
     }

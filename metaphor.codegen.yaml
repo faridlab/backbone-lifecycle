@@ -55,6 +55,10 @@ user_owned:
   - "migrations/20261003100001_create_severance_statutory_tables.down.sql"
   - "migrations/20261003100002_add_final_settlement_breakdown.up.sql"
   - "migrations/20261003100002_add_final_settlement_breakdown.down.sql"
+  # The offboarding's link to the settlement drafted for it, with the backfill of
+  # settlements drafted before the column existed.
+  - "migrations/20261017120000_add_offboarding_final_settlement_link.up.sql"
+  - "migrations/20261017120000_add_offboarding_final_settlement_link.down.sql"
 
   # Behavior tests (the golden cases / oracle) + BDD features.
   - "tests/features/**"

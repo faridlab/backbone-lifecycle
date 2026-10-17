@@ -49,6 +49,11 @@ models:
         attributes: ["@required", "@default(initiated)"]
         description: "Workflow status"
 
+      final_settlement_id:
+        type: uuid?
+        attributes: ["@immutable", "@exclude_from_foreign_key_check"]
+        description: "The final settlement drafted for this offboarding (one per offboarding), set by the draft verb; NULL = none drafted yet # logical FK lifecycle.FinalSettlement.id"
+
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

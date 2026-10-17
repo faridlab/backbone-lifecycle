@@ -246,7 +246,8 @@ impl FinalSettlementWriteService {
     ///
     /// # Returns
     ///
-    /// - `Ok(settlement_id)` on a fresh draft.
+    /// - `Ok(settlement_id)` on a fresh draft; the offboarding's `final_settlement_id`
+    ///   is set to it in the same transaction.
     /// - [`FinalSettlementError::AlreadyDrafted`] (409, carrying the existing id) when a
     ///   live settlement already exists for this offboarding — the partial unique index
     ///   makes the double-draft impossible even under concurrency; this surfaces it.
@@ -364,6 +365,13 @@ impl FinalSettlementWriteService {
                 });
             }
         };
+
+        // The offboarding names its settlement, so a reader knows one is drafted.
+        sqlx::query("UPDATE lifecycle.offboardings SET final_settlement_id = $2 WHERE id = $1")
+            .bind(offboarding_id)
+            .bind(settlement_id)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
         Ok(settlement_id)

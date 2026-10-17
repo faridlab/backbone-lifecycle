@@ -5629,6 +5629,10 @@ components:
           format: date
         status:
           type: string
+        final_settlement_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -5668,6 +5672,10 @@ components:
           format: date
         status:
           type: string
+        final_settlement_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -5694,6 +5702,10 @@ components:
           format: date
         status:
           type: string
+        final_settlement_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -5713,6 +5725,10 @@ components:
           format: date
         status:
           type: string
+        final_settlement_id:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 

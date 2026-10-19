@@ -206,6 +206,12 @@ impl super::Entity for OnboardingTask {
 }
 
 impl backbone_core::PersistentEntity for OnboardingTask {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("onboarding_id", "lifecycle.onboardings", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

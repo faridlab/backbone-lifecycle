@@ -20,18 +20,18 @@ pub mod promotion_handler;
 
 
 // Re-exports
-pub use clearance_item_handler::{create_clearance_item_routes, create_clearance_item_read_routes, create_clearance_item_write_routes};
-pub use contract_handler::{create_contract_routes, create_contract_read_routes, create_contract_write_routes, create_contract_history_route};
-pub use contract_template_handler::{create_contract_template_routes, create_contract_template_read_routes, create_contract_template_write_routes};
-pub use discipline_record_handler::{create_discipline_record_routes, create_discipline_record_read_routes, create_discipline_record_write_routes, create_discipline_record_history_route};
-pub use exit_interview_handler::{create_exit_interview_routes, create_exit_interview_read_routes, create_exit_interview_write_routes};
-pub use final_settlement_handler::{create_final_settlement_routes, create_final_settlement_read_routes, create_final_settlement_write_routes};
-pub use offboarding_handler::{create_offboarding_routes, create_offboarding_read_routes, create_offboarding_write_routes};
-pub use onboarding_handler::{create_onboarding_routes, create_onboarding_read_routes, create_onboarding_write_routes};
-pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboarding_task_read_routes, create_onboarding_task_write_routes};
-pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes};
-pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes};
-pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes};
+pub use clearance_item_handler::{create_clearance_item_routes, create_clearance_item_read_routes, create_clearance_item_write_routes, clearance_item_permissions};
+pub use contract_handler::{create_contract_routes, create_contract_read_routes, create_contract_write_routes, contract_permissions, create_contract_history_route};
+pub use contract_template_handler::{create_contract_template_routes, create_contract_template_read_routes, create_contract_template_write_routes, contract_template_permissions};
+pub use discipline_record_handler::{create_discipline_record_routes, create_discipline_record_read_routes, create_discipline_record_write_routes, discipline_record_permissions, create_discipline_record_history_route};
+pub use exit_interview_handler::{create_exit_interview_routes, create_exit_interview_read_routes, create_exit_interview_write_routes, exit_interview_permissions};
+pub use final_settlement_handler::{create_final_settlement_routes, create_final_settlement_read_routes, create_final_settlement_write_routes, final_settlement_permissions};
+pub use offboarding_handler::{create_offboarding_routes, create_offboarding_read_routes, create_offboarding_write_routes, offboarding_permissions};
+pub use onboarding_handler::{create_onboarding_routes, create_onboarding_read_routes, create_onboarding_write_routes, onboarding_permissions};
+pub use onboarding_task_handler::{create_onboarding_task_routes, create_onboarding_task_read_routes, create_onboarding_task_write_routes, onboarding_task_permissions};
+pub use onboarding_template_handler::{create_onboarding_template_routes, create_onboarding_template_read_routes, create_onboarding_template_write_routes, onboarding_template_permissions};
+pub use onboarding_template_task_handler::{create_onboarding_template_task_routes, create_onboarding_template_task_read_routes, create_onboarding_template_task_write_routes, onboarding_template_task_permissions};
+pub use promotion_handler::{create_promotion_routes, create_promotion_read_routes, create_promotion_write_routes, promotion_permissions};
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

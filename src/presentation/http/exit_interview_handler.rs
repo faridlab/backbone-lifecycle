@@ -80,6 +80,13 @@ impl axum::response::IntoResponse for ExitInterviewError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `exit_interview:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn exit_interview_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("exit_interview")
+        .in_module("lifecycle")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for ExitInterview.
 ///
 /// # Routes
@@ -109,21 +116,23 @@ impl axum::response::IntoResponse for ExitInterviewError {
 /// let router = create_exit_interview_routes(service);
 /// ```
 pub fn create_exit_interview_routes(service: Arc<ExitInterviewService>) -> Router {
-    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::routes(
+    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::routes_guarded(
         service,
         "/exit_interviews",
+        exit_interview_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for ExitInterview.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_exit_interview_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_exit_interview_read_routes(service: Arc<ExitInterviewService>) -> Router {
-    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::read_routes(
+    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::read_routes_guarded(
         service,
         "/exit_interviews",
+        exit_interview_permissions(),
     )
 }
 
@@ -139,9 +148,10 @@ pub fn create_exit_interview_read_routes(service: Arc<ExitInterviewService>) -> 
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_exit_interview_write_routes(service: Arc<ExitInterviewService>) -> Router {
-    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::write_routes(
+    BackboneCrudHandler::<ExitInterviewService, ExitInterview, CreateExitInterviewDto, UpdateExitInterviewDto, ExitInterviewResponseDto>::write_routes_guarded(
         service,
         "/exit_interviews",
+        exit_interview_permissions(),
     )
 }
 

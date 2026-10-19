@@ -80,6 +80,13 @@ impl axum::response::IntoResponse for ClearanceItemError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `clearance_item:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn clearance_item_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("clearance_item")
+        .in_module("lifecycle")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for ClearanceItem.
 ///
 /// # Routes
@@ -109,21 +116,23 @@ impl axum::response::IntoResponse for ClearanceItemError {
 /// let router = create_clearance_item_routes(service);
 /// ```
 pub fn create_clearance_item_routes(service: Arc<ClearanceItemService>) -> Router {
-    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::routes(
+    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::routes_guarded(
         service,
         "/clearance_items",
+        clearance_item_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for ClearanceItem.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_clearance_item_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_clearance_item_read_routes(service: Arc<ClearanceItemService>) -> Router {
-    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::read_routes(
+    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::read_routes_guarded(
         service,
         "/clearance_items",
+        clearance_item_permissions(),
     )
 }
 
@@ -139,9 +148,10 @@ pub fn create_clearance_item_read_routes(service: Arc<ClearanceItemService>) -> 
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_clearance_item_write_routes(service: Arc<ClearanceItemService>) -> Router {
-    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::write_routes(
+    BackboneCrudHandler::<ClearanceItemService, ClearanceItem, CreateClearanceItemDto, UpdateClearanceItemDto, ClearanceItemResponseDto>::write_routes_guarded(
         service,
         "/clearance_items",
+        clearance_item_permissions(),
     )
 }
 

@@ -358,6 +358,12 @@ impl super::Entity for FinalSettlement {
 }
 
 impl backbone_core::PersistentEntity for FinalSettlement {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("offboarding_id", "lifecycle.offboardings", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

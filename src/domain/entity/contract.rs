@@ -256,6 +256,13 @@ impl super::Entity for Contract {
 }
 
 impl backbone_core::PersistentEntity for Contract {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("template_id", "lifecycle.contract_templates", "id"),
+            backbone_core::Reference::new("previous_contract_id", "lifecycle.contracts", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }
